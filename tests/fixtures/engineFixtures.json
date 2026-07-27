@@ -1,0 +1,93 @@
+{
+  "_comment": "Hand-computed golden values for engine unit tests. Every case documents its own arithmetic so a failure can be re-derived on paper.",
+
+  "waterFilling": {
+    "_comment": "d={RB:2,WR:2,TE:1}, F_rem=2, pools desc. Award 1: PP(RB,3)=30 > PP(WR,3)=25 > PP(TE,2)=10 -> RB. Award 2: PP(RB,4)=20 < PP(WR,3)=25 -> WR. thetaStar = value of the last award = 25.",
+    "poolByPos": { "RB": [50, 40, 30, 20], "WR": [45, 35, 25], "TE": [60, 10] },
+    "demand": { "RB": 2, "WR": 2, "TE": 1 },
+    "flexRemaining": 2,
+    "flexEligible": ["RB", "WR", "TE"],
+    "expected": {
+      "r": { "RB": 3, "WR": 3, "TE": 1 },
+      "flexAlloc": { "RB": 1, "WR": 1, "TE": 0 },
+      "thetaStar": 25
+    }
+  },
+
+  "lineup": {
+    "_comment": "QB40 + RB30,20,10 + WR25,15 + TE12 into QB1/RB2/WR2/TE1/FLEX2: dedicated 40+30+20+25+15+12=142, leftover RB10 takes one flex, second flex empty. L=152. Adding WR22: flex becomes 22+10, L=174, MV=22.",
+    "slots": { "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2 },
+    "flexEligible": ["RB", "WR", "TE"],
+    "roster": [
+      { "pos": "QB", "eff": 40 }, { "pos": "RB", "eff": 30 }, { "pos": "RB", "eff": 20 },
+      { "pos": "RB", "eff": 10 }, { "pos": "WR", "eff": 25 }, { "pos": "WR", "eff": 15 },
+      { "pos": "TE", "eff": 12 }
+    ],
+    "expectedTotal": 152,
+    "addPlayer": { "pos": "WR", "eff": 22 },
+    "expectedTotalAfter": 174
+  },
+
+  "marginalValue": {
+    "_comment": "Empty roster padded at replacement {QB:20,RB:15,WR:12,TE:8,FLEX:10}: base L = 20+15+15+12+12+8+10+10 = 102. Add RB eff 100: RB slots 100+15, bumped RB15 virtual wins a flex over a FLEX10 virtual -> L = 20+115+24+8+(15+10) = 192. MV = 90 = eff - flex water level - (nothing else displaced).",
+    "slots": { "QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2 },
+    "flexEligible": ["RB", "WR", "TE"],
+    "replacement": { "QB": 20, "RB": 15, "WR": 12, "TE": 8, "FLEX": 10 },
+    "candidate": { "pos": "RB", "eff": 100 },
+    "expectedMV": 90
+  },
+
+  "logistic": {
+    "_comment": "mu=30, sigma=6 -> s=0.5513*6=3.3078. S(30)=0.5 exactly. S(36)=1/(1+e^(6/3.3078))=1/(1+e^1.813895)=1/(1+6.13430)=0.140168 (hand computation, tol 1e-4).",
+    "mu": 30, "sigma": 6,
+    "atMu": { "P": 30, "S": 0.5 },
+    "past": { "P": 36, "S": 0.140168, "tol": 0.0001 }
+  },
+
+  "poissonBinomial": {
+    "_comment": "p=[0.5,0.5]: PMF (0.25,0.5,0.25). p=[0.2,0.3]: P0=0.8*0.7=0.56, P1=0.2*0.7+0.8*0.3=0.38, P2=0.06.",
+    "cases": [
+      { "ps": [0.5, 0.5], "pmf": [0.25, 0.5, 0.25] },
+      { "ps": [0.2, 0.3], "pmf": [0.56, 0.38, 0.06] }
+    ]
+  },
+
+  "tierSurvival": {
+    "_comment": "survivals [0.5,0.5]: P(K>=1)=1-0.25=0.75, P(K>=2)=0.25, E[K]=1.",
+    "survivals": [0.5, 0.5],
+    "pAtLeastOne": 0.75, "pAtLeastTwo": 0.25, "expected": 1
+  },
+
+  "orderedBestAvail": {
+    "_comment": "V/s pairs (100,0.5),(90,0.5),(80,1.0), floor 0: 100*0.5 + 90*0.5*0.5 + 80*1*0.25 = 50+22.5+20 = 92.5. All-dead case pays the floor.",
+    "candidates": [
+      { "value": 100, "survival": 0.5 },
+      { "value": 90, "survival": 0.5 },
+      { "value": 80, "survival": 1.0 }
+    ],
+    "floor": 0,
+    "expected": 92.5,
+    "allDeadFloor": 7.5
+  },
+
+  "binomialTail": {
+    "_comment": "K=6, pi=0.25. P(>=5) = C(6,5)*0.25^5*0.75 + 0.25^6 = 0.00439453125 + 0.000244140625 = 0.004638671875 (exact). P(>=2) = 1 - 0.75^6 - 6*0.25*0.75^5 = 1 - 0.177978515625 - 0.35595703125 = 0.466064453125 (exact).",
+    "cases": [
+      { "K": 6, "c": 5, "pi": 0.25, "p": 0.004638671875 },
+      { "K": 6, "c": 2, "pi": 0.25, "p": 0.466064453125 }
+    ]
+  },
+
+  "tiers12": {
+    "_comment": "Three obvious clusters (gaps 9 and 15 vs within-gaps <=2), sigma 2 everywhere. k=1 SSE (unweighted) = 1880.25; best k=2 = 259.71 (ratio 0.138 > 0.10); best k=3 = 4.667+5+10 = 19.67 (ratio 0.0105 <= 0.10) -> k*=3. Boundary seps 9/sqrt(8)=3.18 and 15/sqrt(8)=5.30, both >= 1.0 -> no merge.",
+    "values": [100, 98, 97, 88, 87, 86, 85, 70, 69, 68, 67, 66],
+    "sigma": 2,
+    "expectedAssignments": [1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3]
+  },
+
+  "tierSepMerge": {
+    "_comment": "Weak: cliff 1 with sigmas 3/3 -> TierSep = 1/sqrt(18) = 0.236 < 1.0 -> merge. Strong: cliff 20 -> 20/sqrt(18) = 4.71 -> keep.",
+    "weak": { "values": [100, 99], "sigmas": [3, 3], "expectSegments": 1 },
+    "strong": { "values": [100, 80], "sigmas": [3, 3], "expectSegments": 2 }
+  }
+}
