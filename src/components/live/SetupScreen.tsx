@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import { gapsAfter, myPicks } from '../../../engine/picks.js';
-import type { DraftState, Store } from '../../state/store';
+import type { DraftState, Store, UiState } from '../../state/store';
 import { loadStrategies, strategyList } from '../../state/strategies';
 import type { StrategyRegistry } from '../../state/strategies';
 import HoldButton from './HoldButton';
@@ -198,7 +198,18 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
       <section class="mt-6">
         <HoldButton
           ms={3000}
-          onHold={() => dispatch({ type: 'RESET_DRAFT' })}
+          onHold={() => {
+            dispatch({ type: 'RESET_DRAFT' });
+            // A resumed-mock label (ReviewScreen → ui.mockLabel) no longer
+            // describes anything once the picks are wiped. The room seed is
+            // deliberately KEPT (same-room semantics, like Redo room).
+            if ((s.ui as Record<string, unknown>).mockLabel != null) {
+              dispatch({
+                type: 'SET_UI',
+                ui: { mockLabel: undefined } as unknown as Partial<UiState>,
+              });
+            }
+          }}
           class="min-h-14 w-full rounded-xl border border-app-border bg-app-surface font-bold text-app-dim"
         >
           Hold 3s to reset draft ({s.picks.length} picks recorded — league config is kept)

@@ -124,10 +124,15 @@ export default function ReviewScreen({
       Built exactly to the IMPORT_STATE reducer's shape: league merged over
       the current one (strategy set EXPLICITLY so a record without one doesn't
       inherit today's), picks with ts:0, cursor = highest n + 1, ui = current
-      ui with the record's room seed (cleared when none was stored). */
+      ui with the record's room seed (cleared when none was stored) AND a
+      ui.mockLabel naming WHAT was loaded — MockControls shows it as
+      "Loaded: …"; Archive/Redo/reset flows clear it. It rides the ONE
+      IMPORT_STATE dispatch (atomic — a separate SET_UI would make one UNDO
+      pop only the label). */
   const resumeMock = (r: MockRecord) => {
     const cur = store.getState();
     const maxN = r.picks.reduce((m, p) => Math.max(m, p.n), 0);
+    const label = `${fmtWhen(r.finishedAt)} · ${r.league.teams}-team slot ${r.league.slot}`;
     const state: PortableState = {
       schemaVersion: 1,
       buildHash: cur.buildHash, // reducer keeps the running board's hash anyway
@@ -141,17 +146,21 @@ export default function ReviewScreen({
       },
       picks: r.picks.map((p) => ({ n: p.n, idx: p.idx, source: p.source as Source, ts: 0 })),
       pickCursor: maxN + 1,
-      ui: { ...cur.ui, mockSeed: r.seed ?? undefined } as unknown as UiState,
+      ui: { ...cur.ui, mockSeed: r.seed ?? undefined, mockLabel: label } as unknown as UiState,
     };
     store.dispatch({ type: 'IMPORT_STATE', state });
     location.hash = '#/live';
   };
 
   /** Same room, different choices: wipe the picks, pin the record's seed —
-      the mock driver re-derives the identical seats/archetypes from it. */
+      the mock driver re-derives the identical seats/archetypes from it.
+      Nothing is "loaded" (fresh start), so any resume label is cleared. */
   const replayRoom = (r: MockRecord) => {
     store.dispatch({ type: 'RESET_DRAFT' });
-    store.dispatch({ type: 'SET_UI', ui: { mockSeed: r.seed } as unknown as Partial<UiState> });
+    store.dispatch({
+      type: 'SET_UI',
+      ui: { mockSeed: r.seed, mockLabel: undefined } as unknown as Partial<UiState>,
+    });
     location.hash = '#/live';
   };
 

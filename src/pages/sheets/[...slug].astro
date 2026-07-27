@@ -28,6 +28,11 @@ import ByeGrid from '../../components/print/ByeGrid';
 import BlankBoard from '../../components/print/BlankBoard';
 import StrategyBrief from '../../components/print/StrategyBrief';
 import PaceCard from '../../components/print/PaceCard';
+import KdstSheet from '../../components/print/KdstSheet';
+import StrategySheet from '../../components/print/StrategySheet';
+import { STRATEGIES, defineStrategy } from '../../../engine/strategy.js';
+import { BUILTIN_META } from '../../state/strategies';
+import strategiesJson from '../../../public/data/strategies.json';
 import board from '../../../public/data/board.json';
 import overrides from '../../../public/data/overrides.json';
 import league from '../../../config/league.json';
@@ -42,11 +47,19 @@ const mcModules = import.meta.glob('../../../public/data/mc.json', {
 });
 const mc: any = Object.values(mcModules)[0] ?? null;
 
-// The sheet registry: id → component (+ flags + fixed props). Complete: all
-// 14 sheets, incl. the MC-dependent S2–S3 (strategy-brief) and S14 (pace-card).
+// The sheet registry: id → component (+ flags + fixed props). All static
+// sheets, incl. the MC-dependent S2–S3 (strategy-brief) and S14 (pace-card),
+// PLUS the dynamic S16 strategy sheets appended by the IIFE below the literal.
 //   slotted:   emit once per slot at sheets/s<slot>/<id>/
 //   landscape: @page size flips (the component renders .sheet.landscape)
-export const SHEETS: Record<string, any> = {
+//
+// HOISTING (why the whole registry lives inside the exported initializer):
+// Astro hoists `export` declarations to module scope but leaves plain
+// frontmatter statements inside the per-render body — so any mutation of
+// SHEETS OUTSIDE this initializer would run AFTER getStaticPaths and its
+// routes would silently never emit (this bit us; do not "simplify" it back).
+export const SHEETS: Record<string, any> = (() => {
+const sheets: Record<string, any> = {
   'ops-card': { title: 'S1 · Draft-Day Ops Card', component: OpsCard, slotted: true },
   'strategy-brief': {
     title: 'S2–S3 · Strategy Brief',
@@ -92,7 +105,54 @@ export const SHEETS: Record<string, any> = {
     component: PaceCard,
     slotted: true,
   },
+  // ── Additions (2026-07): S15 K/DST + the skill-only big-board variant ────
+  // kdst-sheet is slotted for one reason: the reminder box prints the slot's
+  // ACTUAL last-two pick numbers (myPicks().slice(-2) — never constants).
+  // big-board-skill is the SAME BigBoard component with skillOnly:true; the
+  // classic 'big-board' entry keeps its default output untouched.
+  'kdst-sheet': { title: 'S15 · K / DST Tiers', component: KdstSheet, slotted: true },
+  'big-board-skill': {
+    title: 'S4 · Master Big Board — skill only',
+    component: BigBoard,
+    props: { skillOnly: true },
+  },
 };
+
+// ── S16 strategy sheets: one per strategy per slot, at
+// sheets/s<slot>/strategy-<name>/. Emitted for every built-in
+// (engine/strategy.js) PLUS every VALID spec in public/data/strategies.json,
+// read at build time via direct import — invalid specs are skipped with a
+// warning (mirrors the runtime loader), and a custom name whose sheet id
+// would collide with an existing registry id (e.g. a custom strategy named
+// "brief" → "strategy-brief") is skipped, never overwritten.
+const builtinMeta = Object.fromEntries(BUILTIN_META.map((m) => [m.name, m]));
+const allStrategies: any[] = Object.values(STRATEGIES).map((s: any) => ({
+  ...s,
+  label: builtinMeta[s.name]?.label ?? s.name,
+  blurb: builtinMeta[s.name]?.blurb ?? '',
+}));
+for (const spec of (strategiesJson as any).strategies ?? []) {
+  try {
+    allStrategies.push(defineStrategy(spec));
+  } catch (e) {
+    console.warn(`[sheets] skipped invalid strategy spec "${(spec as any)?.name}": ${(e as Error).message}`);
+  }
+}
+for (const st of allStrategies) {
+  const sid = `strategy-${st.name}`;
+  if (sheets[sid]) {
+    console.warn(`[sheets] strategy "${st.name}" collides with sheet id "${sid}" — skipped`);
+    continue;
+  }
+  sheets[sid] = {
+    title: `S16 · Strategy Sheet — ${st.label ?? st.name}`,
+    component: StrategySheet,
+    slotted: true,
+    props: { strategy: st },
+  };
+}
+return sheets;
+})();
 
 export function getStaticPaths() {
   const paths = [];

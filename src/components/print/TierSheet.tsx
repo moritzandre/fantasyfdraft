@@ -93,7 +93,7 @@ function TierRows({ board, pos }: { board: any; pos: string }) {
               weak break (TierSep {cards[i - 1].t.tierSep.toFixed(1)}) — treat as one tier
             </div>
           )}
-          <div class="tier-card">
+          <div class="tier-card" data-pos={pos}>
             <div class={`tc-head tier-${t.letter.toLowerCase()}`}>
               Tier {t.letter} — {t.members.length} players
               {next

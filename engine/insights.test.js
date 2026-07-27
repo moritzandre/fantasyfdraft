@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { leagueNeeds, waitWindowThreats } from './insights.js';
+import {
+  INFER_LEAN_MARGIN,
+  INFER_STRONG_MARGIN,
+  inferSeatStrategies,
+  leagueNeeds,
+  waitWindowThreats,
+} from './insights.js';
+import { STRATEGIES, defineStrategy } from './strategy.js';
 
 // Tiny hand-checkable league: 3 teams, 4 rounds, snake.
 // Pick order: R1 1,2,3 → R2 3,2,1 → R3 1,2,3 → R4 3,2,1.
@@ -98,6 +105,82 @@ test('waitWindowThreats: filled positions drop out of the pressure report', () =
   assert.equal(res.posPressure.RB.picksInWindow, 4);
   // QB: all four window teams still need one.
   assert.deepEqual(res.posPressure.QB.teamsNeeding, [9, 10, 11, 12]);
+});
+
+// ── inferSeatStrategies ─────────────────────────────────────────────────────
+// Seat 3 of 12 picks at n=3 (R1), 22 (R2: 13..24 map slots 12..1), 27 (R3),
+// 46 (R4: 37..48 map slots 12..1) — hand-checked snake math.
+
+const INFER_PLAYERS = [
+  { idx: 0, pos: 'WR' }, { idx: 1, pos: 'WR' }, { idx: 2, pos: 'WR' },
+  { idx: 3, pos: 'RB' }, { idx: 4, pos: 'RB' }, { idx: 5, pos: 'RB' },
+  { idx: 6, pos: 'TE' }, { idx: 7, pos: 'QB' },
+];
+
+const WR_HEAVY = defineStrategy({
+  name: 'wr_heavy',
+  multipliers: { WR: [{ from: 1, to: 4, m: 1.4 }] },
+  constraints: [{ pos: 'WR', type: 'min', by: 4, need: 3 }],
+});
+const REGISTRY = { ...STRATEGIES, wr_heavy: WR_HEAVY };
+
+test('inferSeatStrategies: three early WRs read wr_heavy STRONG', () => {
+  const entries = [{ n: 3, idx: 0 }, { n: 22, idx: 1 }, { n: 27, idx: 2 }];
+  const reads = inferSeatStrategies(entries, FULL, INFER_PLAYERS, REGISTRY);
+  assert.equal(reads.length, 12);
+  const t3 = reads[2];
+  assert.equal(t3.slot, 3);
+  assert.deepEqual(t3.counts, { WR: 3 });
+  // score = 3·ln 1.4 + 0.15 (min 3 WR by R4 already met) ≈ 1.16 ≥ 0.9
+  assert.equal(t3.bestFit, 'wr_heavy');
+  assert.equal(t3.confidence, 'strong');
+  assert.ok(3 * Math.log(1.4) + 0.15 >= INFER_STRONG_MARGIN, 'fixture margin sanity');
+  // Every other seat has zero picks → no read.
+  for (const r of reads) {
+    if (r.slot === 3) continue;
+    assert.equal(r.bestFit, null);
+    assert.equal(r.confidence, null);
+  }
+});
+
+test('inferSeatStrategies: a balanced log stays null against every archetype', () => {
+  // RB(R1), WR(R2), TE(R3), RB(R4): wr_heavy earns only ln 1.4 ≈ 0.34 < lean
+  // margin; robust_rb/anchor_rb/zero_rb_mod all VIOLATE a constraint.
+  const entries = [
+    { n: 3, idx: 3 }, { n: 22, idx: 0 }, { n: 27, idx: 6 }, { n: 46, idx: 4 },
+  ];
+  const t3 = inferSeatStrategies(entries, FULL, INFER_PLAYERS, REGISTRY)[2];
+  assert.deepEqual(t3.counts, { RB: 2, WR: 1, TE: 1 });
+  assert.equal(t3.bestFit, null);
+  assert.equal(t3.confidence, null);
+  assert.ok(Math.log(1.4) < INFER_LEAN_MARGIN, 'fixture margin sanity');
+});
+
+test('inferSeatStrategies: three early RBs read robust_rb STRONG, anchor_rb penalized', () => {
+  // 3·ln 1.25 + 0.15 (≥2 RB by R3 met) + 0.15 (≥3 by R5 met) ≈ 0.97 ≥ 0.9;
+  // anchor_rb takes the R2/R3 dampeners AND violates max 1 RB through R4.
+  const entries = [{ n: 3, idx: 3 }, { n: 22, idx: 4 }, { n: 27, idx: 5 }];
+  const t3 = inferSeatStrategies(entries, FULL, INFER_PLAYERS, REGISTRY)[2];
+  assert.equal(t3.bestFit, 'robust_rb');
+  assert.equal(t3.confidence, 'strong');
+});
+
+test('inferSeatStrategies: fewer than 3 picks ⇒ no read, even when extreme', () => {
+  const entries = [{ n: 3, idx: 0 }, { n: 22, idx: 1 }];
+  const t3 = inferSeatStrategies(entries, FULL, INFER_PLAYERS, REGISTRY)[2];
+  assert.deepEqual(t3.counts, { WR: 2 });
+  assert.equal(t3.bestFit, null);
+  assert.equal(t3.confidence, null);
+});
+
+test('inferSeatStrategies: a violated max drops the archetype below its multiplier fit', () => {
+  // zero_rb_mod can never be the read once the seat drafts an early RB, and
+  // holes (idx null) advance the deadline clock without counting as picks.
+  const entries = [
+    { n: 3, idx: 3 }, { n: 22, idx: 0 }, { n: 27, idx: 1 }, { n: 40, idx: null },
+  ];
+  const t3 = inferSeatStrategies(entries, FULL, INFER_PLAYERS, REGISTRY)[2];
+  assert.notEqual(t3.bestFit, 'zero_rb_mod');
 });
 
 test('waitWindowThreats: draft over / no next pick', () => {

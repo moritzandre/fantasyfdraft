@@ -76,7 +76,7 @@ export default function TargetsFades({
   const Row = ({ p, delta }: { p: any; delta: number }) => {
     const reason = tags[String(p.idx)]?.reason;
     return (
-      <div class="tf-row">
+      <div class="tf-row" data-pos={p.pos}>
         <span class="tf-name">{abbrevName(p.name, 20)}</span>
         <span>
           {p.pos}
@@ -129,7 +129,7 @@ export default function TargetsFades({
                 MY PICK {g.pick} · R{g.round}
               </div>
               {g.players.map((p: any) => (
-                <div class="tf-row">
+                <div class="tf-row" data-pos={p.pos}>
                   <span class="tf-name">{abbrevName(p.name, 20)}</span>
                   <span>
                     {p.pos}

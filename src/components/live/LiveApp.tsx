@@ -156,16 +156,17 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
 
   const activeProfile = profiles.profiles.find((p) => p.id === profiles.activeId);
 
-  // The persistent bottom nav shows everywhere EXCEPT the pick-clock cockpit
-  // (#/live keeps its full height + own panel tabs; TopBar/League navigate
-  // out). The padding class keeps every screen's tail scrollable above it.
-  const showNav = route !== '#/live';
+  // The persistent bottom nav shows EVERYWHERE, including the pick-clock
+  // cockpit (#/live) — one tap to any tool during the draft too. live.css
+  // subtracts the bar (64px + safe-area) from .lv-grid whenever the
+  // .lv-app-navpad wrapper is present, and stacks the narrow-mode panel tabs
+  // ABOVE it, so the cockpit still fits without scrolling (see the calc
+  // table in live.css). The padding class keeps every other screen's tail
+  // scrollable above the fixed bar.
 
   return (
     <div
-      class={`lv-app ${s.ui.grayscalePreview ? 'grayscale-preview' : ''} ${
-        showNav ? 'lv-app-navpad' : ''
-      }`}
+      class={`lv-app lv-app-navpad ${s.ui.grayscalePreview ? 'grayscale-preview' : ''}`}
     >
       {swUpdate && (
         <button
@@ -230,7 +231,7 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
       {route === '#/guide' && <GuideScreen />}
       {route === '#/sim' && <SimLab s={s} store={store} board={board} />}
       {route === '#/more' && <MoreScreen />}
-      {showNav && <NavBar route={route} />}
+      <NavBar route={route} />
     </div>
   );
 }

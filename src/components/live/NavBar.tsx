@@ -1,9 +1,9 @@
 // NavBar.tsx — the persistent bottom navigation bar for the draft app.
 // Fixed, 64px + safe-area (the season page's tab-bar convention), one tap to
-// any main tool from anywhere. Deliberately HIDDEN on #/live: the pick-clock
-// cockpit keeps every vertical pixel and has its own Board/Recs/Team panel
-// tabs — leaving the draft is a TopBar/League action there, not a nav-bar
-// temptation. Season is a separate page, so its item is a full href.
+// any main tool from anywhere — INCLUDING #/live: the cockpit's .lv-grid
+// subtracts the bar's height (live.css calc table) and the narrow-mode
+// Board/Recs/Team tabs stack directly above it, so nothing overlaps and
+// nothing scrolls. Season is a separate page, so its item is a full href.
 
 interface Item {
   href: string;

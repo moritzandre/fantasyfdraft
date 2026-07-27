@@ -232,8 +232,12 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
             setRunning(false);
             store.dispatch({ type: 'RESET_DRAFT' });
             // Clear the persisted room seed so the NEXT mock draws a fresh
-            // room; roomRev forces a new driver over the fresh seed.
-            store.dispatch({ type: 'SET_UI', ui: { mockSeed: undefined } as unknown as Partial<UiState> });
+            // room (and any resumed-mock label — mirrors MockControls'
+            // Archive); roomRev forces a new driver over the fresh seed.
+            store.dispatch({
+              type: 'SET_UI',
+              ui: { mockSeed: undefined, mockLabel: undefined } as unknown as Partial<UiState>,
+            });
             setRoomRev((r) => r + 1);
           }}
           class="min-h-14 w-full rounded-xl border border-app-border bg-app-surface font-bold text-app-dim"

@@ -56,7 +56,7 @@ function replacementEff(players: any[], r: Record<string, number>) {
 function Row({ p, vbd }: { p: any; vbd: number }) {
   const delta = p.adp?.mu != null ? p.adp.mu - p.overallRank : null;
   return (
-    <div class={`bb-row tier-${p.tierLetter.toLowerCase()}`}>
+    <div class={`bb-row tier-${p.tierLetter.toLowerCase()}`} data-pos={p.pos}>
       <span class="num bb-rank">{p.overallRank}</span>
       <span class="bb-tier">{p.tierLetter}</span>
       <span class="bb-name">{abbrevName(p.name)}</span>
@@ -95,8 +95,20 @@ function HeadRow() {
   );
 }
 
-export default function BigBoard({ board, league }: { board: any; league: any }) {
-  const players = [...board.players].sort((a, b) => a.overallRank - b.overallRank);
+export default function BigBoard({
+  board,
+  league,
+  skillOnly = false,
+}: {
+  board: any;
+  league: any;
+  /** Drop K/DST rows (they live on the S15 K/DST sheet). Default false —
+      the classic S4/S5 output is byte-identical without the prop. */
+  skillOnly?: boolean;
+}) {
+  const players = [...board.players]
+    .filter((p) => !skillOnly || (p.pos !== 'K' && p.pos !== 'DST'))
+    .sort((a, b) => a.overallRank - b.overallRank);
   const repl = replacementEff(players, board.baselinesPrior?.r ?? {});
   const pages = chunk(players, PER_PAGE);
 
@@ -125,11 +137,12 @@ export default function BigBoard({ board, league }: { board: any; league: any })
       {pages.map((page, pi) => (
         <section class="sheet">
           <header class="sheet-head">
-            <h1>Master Big Board · S4</h1>
+            <h1>Master Big Board{skillOnly ? ' — skill only' : ''} · S4</h1>
             <p class="sheet-meta">
               {league.teams}-team half-PPR · slot {league.slot} · VBD on eff (injury-adjusted) ·
               ▲ market takes him later than my rank (value) · ▼ earlier (reach to get him) ·
               cliff = VBD pts lost across the tier break · ✗ = strike out by pen
+              {skillOnly ? ' · K/DST removed — see the S15 K/DST sheet' : ''}
             </p>
           </header>
           <div class="bb-grid">

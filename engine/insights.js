@@ -1,6 +1,7 @@
 // insights.js — league-wide roster/needs reconstruction from the n-aware
-// pick log: who has what, who still needs what, and which of those teams
-// pick inside MY wait window. PURE: no DOM, no fetch, no globals, no
+// pick log: who has what, who still needs what, which of those teams pick
+// inside MY wait window, and which strategy archetype a seat's picks LOOK
+// like (inferSeatStrategies). PURE: no DOM, no fetch, no globals, no
 // Date.now(). Display-layer math only — nothing here feeds the score
 // (urgency stays inside E[BestAvail]/VONA per the structural rule in
 // index.js).
@@ -11,6 +12,7 @@
 // selectors.rosterOf semantics.
 
 import { slotForPick, roundForPick, nextMyPick, myPicks } from './picks.js';
+import { multiplierFor } from './strategy.js';
 
 const OPTIMIZED = ['QB', 'RB', 'WR', 'TE'];
 
@@ -136,4 +138,99 @@ export function waitWindowThreats(entries, league, cursor, players) {
   const flexOpenInWindow = windowSlots.filter((slot) => (bySlot.get(slot)?.unfilled.flex ?? 0) > 0);
 
   return { myNextPick: myNext, window, posPressure, flexOpenInWindow };
+}
+
+// ── Seat-strategy inference ("plays like: …") ───────────────────────────────
+
+export const INFER_MIN_PICKS = 3; // < this many observed picks ⇒ no read
+export const INFER_LEAN_MARGIN = 0.45; // log-score margin over balanced for a 'lean'
+export const INFER_STRONG_MARGIN = 0.9; // …and for a 'strong' read
+const CON_SAT_BONUS = 0.15; // per constraint the log has satisfied
+const CON_VIOL_PENALTY = 0.8; // per constraint the log has violated
+
+/**
+ * Infer which strategy ARCHETYPE each seat's observed picks look like.
+ * Display-layer math only — nothing here ever feeds the score.
+ *
+ * Heuristic (log-likelihood-flavoured, against 'balanced' as the null):
+ *   score(arch) = Σ_k log m_arch(pos_k, round_k)   over the seat's picks
+ *     + CON_SAT_BONUS  per constraint the log has SATISFIED
+ *         (min: `need` reached within its deadline — meeting it early counts;
+ *          max: window fully elapsed with no violation)
+ *     − CON_VIOL_PENALTY per constraint the log has VIOLATED
+ *         (max: `limit` exceeded inside the window — the isCompliant rule;
+ *          min: deadline passed with the need unmet)
+ *   Pending constraints (deadline/window not yet reached, judged by the round
+ *   of the highest n in `entries` — holes still advance that clock) score 0.
+ *
+ *   'balanced' is the identity (no multipliers, no constraints) and scores
+ *   exactly 0 — it is the null hypothesis and is never reported as bestFit.
+ *   bestFit = argmax over the other archetypes, reported only when its score
+ *   beats balanced by ≥ INFER_LEAN_MARGIN; confidence is 'strong' at
+ *   ≥ INFER_STRONG_MARGIN, else 'lean'. Seats with < INFER_MIN_PICKS observed
+ *   picks always read {bestFit: null, confidence: null}.
+ *
+ * @param {Array<{n: number, idx: number|null}>} entries  n-aware pick log.
+ * @param {object} league  config/league.json shape.
+ * @param {Array<object>} players  board.players.
+ * @param {Object<string, object>} archetypes  registry name → strategy
+ *        (STRATEGIES built-ins and/or defineStrategy outputs).
+ * @returns {Array<{slot: number, counts: Object<string, number>,
+ *   bestFit: string|null, confidence: 'strong'|'lean'|null}>} seats 1..N.
+ */
+export function inferSeatStrategies(entries, league, players, archetypes) {
+  const N = league.teams;
+  const seatPicks = Array.from({ length: N + 1 }, () => []);
+  const counts = Array.from({ length: N + 1 }, () => ({}));
+  let maxN = 0;
+  const sorted = [...entries].sort((a, b) => a.n - b.n);
+  for (const e of sorted) {
+    if (e.n > maxN) maxN = e.n; // holes still advance the draft clock
+    if (e.idx == null || e.idx < 0 || !players[e.idx]) continue;
+    const slot = slotForPick(e.n, N, league.snake);
+    const pos = players[e.idx].pos;
+    seatPicks[slot].push({ round: roundForPick(e.n, N), pos });
+    counts[slot][pos] = (counts[slot][pos] ?? 0) + 1;
+  }
+  const currentRound = maxN > 0 ? roundForPick(maxN, N) : 0;
+
+  const names = Object.keys(archetypes ?? {}).filter((nm) => nm !== 'balanced');
+  const out = [];
+  for (let slot = 1; slot <= N; slot++) {
+    const picks = seatPicks[slot];
+    if (picks.length < INFER_MIN_PICKS || names.length === 0) {
+      out.push({ slot, counts: counts[slot], bestFit: null, confidence: null });
+      continue;
+    }
+    let bestName = null;
+    let bestScore = -Infinity;
+    for (const nm of names) {
+      const strat = archetypes[nm];
+      let score = 0;
+      for (const pk of picks) score += Math.log(multiplierFor(strat, pk.pos, pk.round));
+      for (const c of strat.constraints ?? []) {
+        if (c.type === 'max') {
+          let have = 0;
+          let violated = false;
+          for (const pk of picks) {
+            if (pk.pos !== c.pos || pk.round > c.through) continue;
+            have += 1;
+            if (have > c.limit) { violated = true; break; }
+          }
+          if (violated) score -= CON_VIOL_PENALTY;
+          else if (currentRound > c.through) score += CON_SAT_BONUS;
+        } else { // min
+          let have = 0;
+          for (const pk of picks) if (pk.pos === c.pos && pk.round <= c.by) have += 1;
+          if (have >= c.need) score += CON_SAT_BONUS;
+          else if (currentRound > c.by) score -= CON_VIOL_PENALTY;
+        }
+      }
+      if (score > bestScore) { bestScore = score; bestName = nm; }
+    }
+    const bestFit = bestScore >= INFER_LEAN_MARGIN ? bestName : null; // margin vs balanced ≡ 0
+    const confidence = bestFit === null ? null : bestScore >= INFER_STRONG_MARGIN ? 'strong' : 'lean';
+    out.push({ slot, counts: counts[slot], bestFit, confidence });
+  }
+  return out;
 }

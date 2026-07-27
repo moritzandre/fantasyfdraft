@@ -1,19 +1,27 @@
 // LeagueScreen.tsx — #/league: the room, not just my seat. Two modes
 // (PickLog's log|catchup precedent): ROSTERS — all N team cards built from
 // selectors.rosterOf + fillSlots (the same pure pieces MY TEAM uses), with
-// per-team needs and next-pick-at; GRID — the live rounds×teams draft board
-// (LiveDraftGrid). Everything is derived from the pick log, memoized on
-// [s.rev], never persisted. Display-only: recording picks stays a one-tap
-// action on #/live.
+// per-team needs, next-pick-at, an inferred "plays like: …" archetype chip
+// (engine/insights.js inferSeatStrategies) and, for seats picking inside MY
+// wait window, their likely next picks (src/state/intent.ts likelyPicks);
+// GRID — the live rounds×teams draft board (LiveDraftGrid). Everything is
+// derived from the pick log, memoized on [s.rev], never persisted; intent is
+// pure decoration — any failure renders nothing. Display-only: recording
+// picks stays a one-tap action on #/live.
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { Board, DraftState, Store } from '../../state/store';
 import { selectors } from '../../state/store';
 import { fillSlots } from './RosterRail';
 import { leagueNeeds } from '../../../engine/insights.js';
+import { nextMyPick, roundForPick } from '../../../engine/picks.js';
 import { abbrevName } from '../../../shared/format.js';
 import { loadOpponents, seatName } from '../../state/opponents';
 import type { OpponentsFile } from '../../state/opponents';
+import { inferSeats, likelyPicks } from '../../state/intent';
+import type { SeatRead } from '../../state/intent';
+import { loadStrategies } from '../../state/strategies';
+import type { StrategyRegistry } from '../../state/strategies';
 import LiveDraftGrid from './LiveDraftGrid';
 
 type Mode = 'rosters' | 'grid';
@@ -21,20 +29,56 @@ type Mode = 'rosters' | 'grid';
 export default function LeagueScreen({ s, store, board }: { s: DraftState; store: Store; board: Board }) {
   const [mode, setMode] = useState<Mode>('rosters');
   const [opp, setOpp] = useState<OpponentsFile | null>(null);
+  const [registry, setRegistry] = useState<StrategyRegistry | null>(null);
   useEffect(() => {
     loadOpponents().then(setOpp);
+    loadStrategies().then(setRegistry);
   }, []);
 
+  const entries = useMemo(() => s.picks.map((p) => ({ n: p.n, idx: p.idx })), [s.rev]);
+
   const needs = useMemo(
-    () =>
-      leagueNeeds(
-        s.picks.map((p) => ({ n: p.n, idx: p.idx })),
-        s.league,
-        board.players,
-        s.pickCursor,
-      ),
+    () => leagueNeeds(entries, s.league, board.players, s.pickCursor),
     [s.rev],
   );
+
+  // "plays like" reads — lazy (registry loaded), silent on failure.
+  const reads: SeatRead[] | null = useMemo(() => {
+    if (registry === null) return null;
+    try {
+      return inferSeats(board, s.league, registry, entries);
+    } catch {
+      return null;
+    }
+  }, [s.rev, registry]);
+
+  // Likely next picks for the seats that pick BETWEEN the cursor and my next
+  // pick (waitWindowThreats' window semantics: when I'm on the clock the
+  // window starts after my pick). Decoration — failures render nothing.
+  const likelyBySlot = useMemo(() => {
+    const m = new Map<number, string>();
+    if (!opp || registry === null) return m;
+    const winStart = selectors.isMyPick(s) ? s.pickCursor + 1 : s.pickCursor;
+    const winEnd = nextMyPick(winStart, s.league);
+    if (winEnd === null) return m;
+    for (const t of needs.teams) {
+      if (t.slot === s.league.slot || t.nextPickAt === null) continue;
+      if (t.nextPickAt < winStart || t.nextPickAt >= winEnd) continue;
+      try {
+        const lp = likelyPicks(
+          board, s.league, opp, registry, entries,
+          t.slot, roundForPick(t.nextPickAt, s.league.teams), 3,
+        );
+        const names = lp
+          .map((x) => abbrevName(board.players[x.idx]?.name ?? `#${x.idx}`, 14))
+          .join(' · ');
+        if (names) m.set(t.slot, names);
+      } catch {
+        /* intent is decoration — the card renders without it */
+      }
+    }
+    return m;
+  }, [s.rev, opp, registry]);
   const rosters = useMemo(
     () =>
       Array.from({ length: s.league.teams }, (_, i) =>
@@ -74,6 +118,8 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
           {needs.teams.map((t) => {
             const isMe = t.slot === s.league.slot;
             const { slots, bench } = rosters[t.slot - 1];
+            const read = !isMe ? reads?.[t.slot - 1] : undefined;
+            const likely = likelyBySlot.get(t.slot);
             const needSummary = Object.entries(t.unfilled.dedicated)
               .map(([pos, n]) => ((n as number) > 1 ? `${n}×${pos}` : pos))
               .join(' · ');
@@ -88,9 +134,22 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
                 }`}
               >
                 <header class="flex items-baseline justify-between pb-2">
-                  <span class="font-bold">
+                  <span class="min-w-0 font-bold">
                     {seatName(opp, t.slot, s.league.slot)}
                     <span class="ml-2 text-xs font-normal text-app-dim">T{t.slot}</span>
+                    {read?.bestFit && (
+                      <span
+                        class={`ml-2 rounded border px-1.5 py-0.5 text-[11px] font-bold ${
+                          read.confidence === 'strong'
+                            ? 'border-accent text-accent'
+                            : 'border-app-border text-app-dim'
+                        }`}
+                        title={`inferred from this seat's picks (${read.confidence})`}
+                      >
+                        plays like: {read.bestFit}
+                        {read.confidence === 'lean' ? '?' : ''}
+                      </span>
+                    )}
                   </span>
                   <span class="num text-xs text-app-dim">
                     {t.slot === onClock
@@ -115,6 +174,11 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
                     </li>
                   ))}
                 </ul>
+                {likely && (
+                  <p class="truncate pt-1.5 text-xs text-app-dim" title="likely next pick (opponent model + inferred archetype)">
+                    likely: <span class="text-app-text">{likely}</span>
+                  </p>
+                )}
                 <footer class="flex items-baseline justify-between pt-2 text-xs text-app-dim">
                   <span>
                     {bench.length > 0 && `${bench.length} bench`}

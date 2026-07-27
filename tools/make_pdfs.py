@@ -14,8 +14,11 @@ has a documented failure mode of writing NOTHING while exiting 0, so the
 size assert is the actual gate, not the exit code.
 
 Usage:
-  python tools/make_pdfs.py --preset minimal|core|full [--paper a4|letter|both]
+  python tools/make_pdfs.py --preset minimal|core|full|strategies
+                            [--paper a4|letter|both]
                             [--mode color|gray|both] [--sheet <id>] [--slot N]
+  --preset strategies renders one S16 strategy sheet per strategy
+          (built-ins + public/data/strategies.json).
   --sheet overrides the preset (single-sheet reprint after a late board change).
   --slot picks which slot's variant of the slot-dependent sheets to render
          (they live at sheets/s<slot>/<id>/); default = config/league.json slot.
@@ -54,13 +57,39 @@ BASE = site_base()
 # Slot-DEPENDENT sheets render once per slot at docs/sheets/s<slot>/<id>/
 # (plan AMENDMENT: every slot 1..N is selectable); everything else is shared
 # at docs/sheets/<id>/. Must match the `slotted` flags in the sheet registry
-# (src/pages/sheets/[...slug].astro).
-SLOT_SHEETS = {"ops-card", "strategy-brief", "targets-fades", "blank-board", "pace-card"}
+# (src/pages/sheets/[...slug].astro). The dynamic S16 sheets (strategy-<name>,
+# one per strategy) are all slotted and matched by prefix in is_slotted().
+SLOT_SHEETS = {"ops-card", "strategy-brief", "targets-fades", "blank-board", "pace-card",
+               "kdst-sheet"}
+
+# Built-in strategy names (engine/strategy.js STRATEGIES — keep in sync; the
+# customs are read live from strategies.json, so only these four duplicate).
+BUILTIN_STRATEGIES = ["balanced", "anchor_rb", "zero_rb_mod", "robust_rb"]
+
+
+def strategy_sheet_ids() -> list:
+    """One S16 sheet id per strategy: built-ins + public/data/strategies.json
+    specs (names only — the registry validated them at build time; anything
+    that failed there has no route and gets skipped by the exists-check)."""
+    ids = [f"strategy-{n}" for n in BUILTIN_STRATEGIES]
+    try:
+        data = json.loads((ROOT / "public" / "data" / "strategies.json").read_text("utf-8"))
+        for spec in data.get("strategies", []):
+            name = spec.get("name")
+            if name and f"strategy-{name}" not in ids:
+                ids.append(f"strategy-{name}")
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"  warning: strategies.json unreadable ({e}) — built-ins only", file=sys.stderr)
+    return ids
+
+
+def is_slotted(sheet: str) -> bool:
+    return sheet in SLOT_SHEETS or sheet.startswith("strategy-")
 
 
 def sheet_rel(sheet: str, slot: int) -> str:
     """Route fragment under sheets/ for this sheet id at this slot."""
-    return f"s{slot}/{sheet}" if sheet in SLOT_SHEETS else sheet
+    return f"s{slot}/{sheet}" if is_slotted(sheet) else sheet
 
 
 # Sheet ids == routes under docs/sheets/<id>/. Presets from the plan:
@@ -71,13 +100,15 @@ PRESETS = {
     "minimal": ["ops-card", "big-board", "blank-board"],
     "core": [
         "ops-card", "strategy-brief", "big-board", "tiers-rb", "tiers-wr",
-        "tiers-te", "tiers-qb-k-dst", "blank-board", "pace-card",
+        "tiers-te", "tiers-qb-k-dst", "kdst-sheet", "blank-board", "pace-card",
     ],
     "full": [
         "ops-card", "strategy-brief", "big-board", "tiers-rb", "tiers-wr",
-        "tiers-te", "tiers-qb-k-dst", "targets-fades", "handcuff-map",
-        "bye-grid", "blank-board", "pace-card",
+        "tiers-te", "tiers-qb-k-dst", "kdst-sheet", "targets-fades",
+        "handcuff-map", "bye-grid", "blank-board", "pace-card",
     ],
+    # "strategies" (one S16 sheet per strategy, incl. strategies.json customs)
+    # is resolved at runtime in main() via strategy_sheet_ids().
 }
 
 
@@ -108,7 +139,7 @@ def serve_docs():
 def render(sheet: str, paper: str, mode: str, slot: int) -> Path:
     rel = sheet_rel(sheet, slot)
     url = f"http://{HOST}:{PORT}{BASE}sheets/{rel}/?paper={paper}&mode={mode}"
-    slot_tag = f"_s{slot}" if sheet in SLOT_SHEETS else ""
+    slot_tag = f"_s{slot}" if is_slotted(sheet) else ""
     pdf = OUT / f"sheet_{sheet}{slot_tag}_{paper}_{mode}.pdf"
     pdf.unlink(missing_ok=True)  # a stale file must not satisfy the assert
     cmd = [
@@ -138,7 +169,8 @@ def render(sheet: str, paper: str, mode: str, slot: int) -> Path:
 
 def main():
     ap = argparse.ArgumentParser(description="Render printed sheets to PDFs via headless Chrome")
-    ap.add_argument("--preset", choices=["minimal", "core", "full"], default="core")
+    ap.add_argument("--preset", choices=["minimal", "core", "full", "strategies"],
+                    default="core")
     ap.add_argument("--paper", choices=["a4", "letter", "both"], default="both")
     ap.add_argument("--mode", choices=["color", "gray", "both"], default="both")
     ap.add_argument("--sheet", help="single sheet id, overrides --preset")
@@ -156,7 +188,12 @@ def main():
         sys.exit("docs/ missing — run `npm run build` first")
     OUT.mkdir(exist_ok=True)
 
-    sheets = [args.sheet] if args.sheet else PRESETS[args.preset]
+    if args.sheet:
+        sheets = [args.sheet]
+    elif args.preset == "strategies":
+        sheets = strategy_sheet_ids()
+    else:
+        sheets = PRESETS[args.preset]
     built, skipped = [], []
     for s in sheets:
         rel = sheet_rel(s, args.slot)

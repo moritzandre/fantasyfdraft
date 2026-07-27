@@ -14,6 +14,9 @@ import { recommend } from '../../../engine/index.js';
 import { waitWindowThreats } from '../../../engine/insights.js';
 import { abbrevName, fmt1, fmtInt, tierLetter } from '../../../shared/format.js';
 import type { Board, DraftState, Store } from '../../state/store';
+import { likelyPicks } from '../../state/intent';
+import { loadOpponents, seatName } from '../../state/opponents';
+import type { OpponentsFile } from '../../state/opponents';
 import { loadStrategies } from '../../state/strategies';
 import type { StrategyRegistry } from '../../state/strategies';
 
@@ -84,10 +87,12 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
 
   // Custom-strategy registry (cached fetch) — recommend() consults it after
   // the built-ins; null until loaded, which resolveStrategy treats as
-  // built-ins-only.
+  // built-ins-only. Opponents feed the wait-window intent line only.
   const [registry, setRegistry] = useState<StrategyRegistry | null>(null);
+  const [opp, setOpp] = useState<OpponentsFile | null>(null);
   useEffect(() => {
     loadStrategies().then(setRegistry);
+    loadOpponents().then(setOpp);
   }, []);
 
   // Previous displayed ordering, for hysteresis + the "changed" dot.
@@ -191,6 +196,28 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
         .slice(0, 3)
     : [];
 
+  // The on-clock team's top-2 likely picks (window[0] — when I'm up, the
+  // window starts at the next opponent instead). Lazy (opponents + registry
+  // loaded) and pure decoration: any failure leaves the strip as-is.
+  const likelyLine = useMemo(() => {
+    if (!threats || threats.window.length === 0 || !opp || registry === null) return null;
+    const w = threats.window[0];
+    try {
+      const lp = likelyPicks(
+        board, s.league, opp, registry,
+        s.picks.map((p) => ({ n: p.n, idx: p.idx })),
+        w.slot, w.round, 2,
+      );
+      if (lp.length === 0) return null;
+      const names = lp
+        .map((x) => abbrevName(board.players[x.idx]?.name ?? `#${x.idx}`, 14))
+        .join(' · ');
+      return `${seatName(opp, w.slot, s.league.slot)} likely: ${names}`;
+    } catch {
+      return null;
+    }
+  }, [s.rev, opp, registry]);
+
   return (
     <div class="p-2">
       <div class="flex items-center justify-between px-1 pb-1">
@@ -235,6 +262,7 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
           {threats.flexOpenInWindow.length > 0 && (
             <span> · {threats.flexOpenInWindow.length} flex open</span>
           )}
+          {likelyLine && <span> · {likelyLine}</span>}
         </a>
       )}
 

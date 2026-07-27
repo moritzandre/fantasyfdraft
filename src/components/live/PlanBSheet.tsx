@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import BigBoard from '../print/BigBoard';
+import PdfBuilder from './PdfBuilder';
 import printCss from '../../styles/print.css?inline';
 import type { Board, DraftState, Store } from '../../state/store';
 
@@ -57,6 +58,7 @@ export default function PlanBSheet({ s, store, board }: { s: DraftState; store: 
           B&W
         </button>
       </div>
+      <PdfBuilder s={s} />
       <p class="border-b border-app-border bg-app-surface px-3 py-2 text-sm text-app-dim">
         Print-grade tier board — engine-free fallback. Drafted players strike through as picks
         are recorded.

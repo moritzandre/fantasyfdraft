@@ -156,6 +156,58 @@
   }
 }
 
+/* ── Real-mode connect strip (LiveScreen, zero picks + sync stopped) ───── */
+.lv-connect {
+  height: 56px;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+}
+
+/* ── Nav bar on #/live: the grid subtracts the fixed bar too ─────────────
+   LiveApp always wraps in .lv-app-navpad now (the nav shows on EVERY route,
+   #/live included), so these override the base/practice heights above.
+   Height budget per combo — every flow bar above the grid plus every fixed
+   bar below it is subtracted, and the two bars stack without overlap
+   because the narrow tabs move up to bottom: 64px + safe-B:
+
+   combo               grid height = 100dvh − (sum) − safe-T − safe-B
+   ─────────────────────────────────────────────────────────────────────
+   wide   · real         72 (topbar) + 64 (nav)                  = 136
+   wide   · practice     72 + 64 (mock strip) + 64 (nav)         = 200
+   narrow · real         72 + 64 (tabs) + 64 (nav)               = 200
+   narrow · practice     72 + 64 (mock) + 64 (tabs) + 64 (nav)   = 264
+   + connect strip       − 56 more (real mode only — [data-connect]
+     never co-occurs with [data-practice])
+
+   safe-T rides the topbar padding; safe-B rides the NAV bar's padding, so
+   the narrow tabs drop their own safe-area (height 64px flat) and sit at
+   bottom: 64px + safe-B — flush on the nav, grid flush on the tabs. */
+.lv-app-navpad .lv-grid {
+  height: calc(100dvh - 136px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+.lv-app-navpad .lv-root[data-practice] .lv-grid {
+  height: calc(100dvh - 200px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+.lv-app-navpad .lv-root[data-connect] .lv-grid {
+  height: calc(100dvh - 192px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+@container (max-width: 899px) {
+  .lv-app-navpad .lv-grid {
+    height: calc(100dvh - 200px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .lv-app-navpad .lv-root[data-practice] .lv-grid {
+    height: calc(100dvh - 264px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .lv-app-navpad .lv-root[data-connect] .lv-grid {
+    height: calc(100dvh - 256px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .lv-app-navpad .lv-tabs {
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    height: 64px;
+    padding-bottom: 0;
+  }
+}
+
 /* ── League view: live draft grid ─────────────────────────────────────── */
 .lv-grid-me { background: color-mix(in oklab, var(--app-accent) 12%, transparent); }
 .lv-grid-cursor {

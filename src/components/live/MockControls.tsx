@@ -8,7 +8,9 @@
 // room) · Redo room (RESET_DRAFT keeping ui.mockSeed AND the driver — the
 // same seed reproduces the same room, nothing archived) · Review link.
 // Every sim pick dispatches PICK_MADE {source:'sim'} through the one
-// reducer — individually undoable like any tap.
+// reducer — individually undoable like any tap. When ReviewScreen's Resume
+// loaded a mock from history, ui.mockLabel names it and the note area shows
+// "Loaded: …" (cleared by Archive/Redo — the picks stop being that mock).
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { Board, DraftState, Store, UiState } from '../../state/store';
@@ -64,6 +66,9 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
   const [speedIdx, setSpeedIdx] = useState(1);
   const [autoMe, setAutoMe] = useState(false);
   const [note, setNote] = useState('');
+  // Set by ReviewScreen's Resume (what mock is loaded); cleared by
+  // Archive/Redo/replay/reset — the ui escape hatch, like mockSeed.
+  const mockLabel = (s.ui as Record<string, unknown>).mockLabel as string | undefined;
   const total = s.league.teams * s.league.rounds;
   const done = s.pickCursor > total;
   const myTurn = !done && selectors.isMyPick(s);
@@ -137,9 +142,13 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
           : { myPicks: g.graded.length, matches: g.matches, evens: g.evens, totalDelta: g.totalDelta },
     });
     store.dispatch({ type: 'RESET_DRAFT' });
-    // Clear the persisted room seed so the NEXT mock draws a fresh room;
-    // roomRev forces a new driver over the fresh seed (RehearsalTab pattern).
-    store.dispatch({ type: 'SET_UI', ui: { mockSeed: undefined } as unknown as Partial<UiState> });
+    // Clear the persisted room seed so the NEXT mock draws a fresh room (and
+    // any resumed-mock label — nothing is loaded anymore); roomRev forces a
+    // new driver over the fresh seed (RehearsalTab pattern).
+    store.dispatch({
+      type: 'SET_UI',
+      ui: { mockSeed: undefined, mockLabel: undefined } as unknown as Partial<UiState>,
+    });
     setRoomRev((r) => r + 1);
     setNote('archived — fresh room ready');
   };
@@ -153,6 +162,13 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
     if (s.picks.length === 0) return;
     setRunning(false);
     store.dispatch({ type: 'RESET_DRAFT' });
+    // A resumed mock's label no longer describes the (now wiped) picks.
+    if (mockLabel) {
+      store.dispatch({
+        type: 'SET_UI',
+        ui: { mockLabel: undefined } as unknown as Partial<UiState>,
+      });
+    }
     setNote('same room, fresh start');
   };
 
@@ -210,7 +226,9 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
             ? 'Loading room…'
             : myTurn && !autoMe
               ? 'YOUR PICK — use the shortlist'
-              : room || 'neutral room'}
+              : mockLabel
+                ? `Loaded: ${mockLabel}`
+                : room || 'neutral room'}
       </span>
       <button
         type="button"

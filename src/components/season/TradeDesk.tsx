@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { evaluateTrade } from '../../../engine/trade.js';
+import { findTrades, positionalNeeds } from '../../../engine/tradefinder.js';
 import { weekEff } from '../../../engine/week.js';
 import { seasonSelectors } from '../../state/season';
 import type { ResolvedPlayer } from '../../state/seasonMerge';
@@ -46,6 +47,85 @@ export default function TradeDesk({
   const [b, setB] = useState<SideState>({ rosterId: null, sandbox: [], sends: [] });
   const [qA, setQA] = useState('');
   const [qB, setQB] = useState('');
+
+  // ---- Trade FINDER ------------------------------------------------------
+  // Suggestions require a synced league (my roster + at least one partner);
+  // the search runs ONLY on the Find button (state, never per-render) — the
+  // sync compute is fast (<100ms over 11 rosters, engine/tradefinder.js
+  // pruning) but still deferred one tick so the "Searching…" row paints.
+  interface FinderResult {
+    partnerId: number;
+    give: ResolvedPlayer[];
+    get: ResolvedPlayer[];
+    my: any;
+    their: any;
+    fairnessNote: string;
+  }
+  const [mode, setMode] = useState('ALL');
+  const [finder, setFinder] = useState<{
+    status: 'idle' | 'running' | 'done';
+    results: FinderResult[];
+    collapsed: boolean;
+  }>({ status: 'idle', results: [], collapsed: false });
+
+  const myRosterEntry = seasonSelectors.myRoster(ss);
+  const myPlayers = useMemo(
+    () => (myRosterEntry ? resolveIds(merged, myRosterEntry.players).players : []),
+    [ss.myRosterId, ss.rev, merged],
+  );
+  const canFind = myPlayers.length > 0 && ss.rosters.length > 1;
+  const needs = useMemo(
+    () =>
+      myPlayers.length > 0
+        ? positionalNeeds(myPlayers, { fromWeek: week, endWeek, slots, flexEligible })
+        : [],
+    [myPlayers, week, endWeek],
+  );
+  // Target chips are league-shape-derived; K/DST are never trade targets.
+  const targetChips = [
+    'ALL',
+    ...Object.keys(slots).filter((p) => p !== 'FLEX' && p !== 'K' && p !== 'DST'),
+  ];
+
+  const pickMode = (m: string) => {
+    setMode(m);
+    setFinder({ status: 'idle', results: [], collapsed: false });
+  };
+
+  const runFinder = () => {
+    if (!canFind || finder.status === 'running') return;
+    setFinder({ status: 'running', results: [], collapsed: false });
+    setTimeout(() => {
+      const partners = ss.rosters
+        .filter((r) => r.rosterId !== ss.myRosterId)
+        .map((r) => ({
+          id: r.rosterId,
+          label: teamLabel(ss, r.rosterId),
+          roster: resolveIds(merged, r.players).players,
+        }));
+      const results = findTrades(
+        myPlayers,
+        partners,
+        { fromWeek: week, endWeek, playoffWeeks: PLAYOFF_WEEKS, slots, flexEligible },
+        { targetPos: mode === 'ALL' ? null : mode },
+      ) as FinderResult[];
+      setFinder({ status: 'done', results, collapsed: false });
+    }, 30);
+  };
+
+  // Tap a suggestion → load it INTO the evaluator (both columns + SENDS
+  // sets) for inspection/tweaking; collapse the list so the verdict is
+  // right there.
+  const loadSuggestion = (r: FinderResult) => {
+    setA({ rosterId: ss.myRosterId, sandbox: [], sends: r.give.map((p) => p.key) });
+    setB({ rosterId: r.partnerId, sandbox: [], sends: r.get.map((p) => p.key) });
+    setFinder((f) => ({ ...f, collapsed: true }));
+  };
+
+  const marketLabel = (m: number | null): string | null => {
+    if (m === null) return null;
+    return Math.abs(m) < 3 ? 'market even' : `market ${signedInt(m)}`;
+  };
 
   // A first successful sync after mount adopts my roster as side A — but
   // only while A is still the untouched default sandbox.
@@ -276,6 +356,116 @@ export default function TradeDesk({
           sandbox-first — works with no league connected · horizon W{week}–{endWeek}
         </p>
       </header>
+
+      {/* Trade FINDER — suggestions over the synced league rosters */}
+      <section class="flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface p-4">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h2 class="text-lg font-bold">Trade finder</h2>
+          {!canFind ? (
+            <span class="text-sm text-app-dim">
+              needs a synced league — connect on the League tab and pick your roster
+            </span>
+          ) : needs.length > 0 ? (
+            <div class="flex flex-wrap gap-2">
+              {needs.map((n) => (
+                <button
+                  key={n.pos}
+                  type="button"
+                  class="lv-clock-near min-h-14 rounded-full px-4 text-[13px] font-bold"
+                  onClick={() => pickMode(n.pos)}
+                  title={`Tap to hunt ${n.pos} trades`}
+                >
+                  {n.severity >= 2 ? `need ${n.pos} starter` : `thin at ${n.pos}`}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span class="text-sm text-app-dim">no glaring roster holes — scan ALL for value</span>
+          )}
+        </div>
+
+        {canFind && (
+          <div class="flex flex-wrap items-center gap-2">
+            {targetChips.map((m) => (
+              <button
+                key={m}
+                type="button"
+                class={`min-h-14 rounded-xl border px-4 font-bold ${
+                  mode === m ? 'border-accent bg-accent/15' : 'border-app-border bg-app-bg'
+                }`}
+                onClick={() => pickMode(m)}
+              >
+                {m}
+              </button>
+            ))}
+            <button
+              type="button"
+              class="min-h-14 flex-1 whitespace-nowrap rounded-xl border border-accent bg-accent/15 px-5 font-bold"
+              onClick={runFinder}
+              disabled={finder.status === 'running'}
+            >
+              {finder.status === 'running'
+                ? 'Searching…'
+                : mode === 'ALL'
+                  ? 'Find value trades'
+                  : `Find ${mode} trades`}
+            </button>
+          </div>
+        )}
+
+        {finder.status === 'running' && (
+          <p class="text-sm text-app-dim">
+            Scanning {ss.rosters.length - 1} rosters for{' '}
+            {mode === 'ALL' ? 'value pickups' : `${mode} targets`}…
+          </p>
+        )}
+
+        {finder.status === 'done' && finder.results.length === 0 && (
+          <p class="text-sm text-app-dim">
+            No plausible {mode === 'ALL' ? '' : `${mode} `}trades clear the bar right now —
+            try another position, or check back after rosters shake up.
+          </p>
+        )}
+
+        {finder.status === 'done' && finder.results.length > 0 && finder.collapsed && (
+          <button
+            type="button"
+            class="min-h-14 rounded-xl border border-app-border bg-app-bg px-4 text-left font-bold"
+            onClick={() => setFinder((f) => ({ ...f, collapsed: false }))}
+          >
+            Trade loaded below ↓ — show {finder.results.length} suggestion
+            {finder.results.length === 1 ? '' : 's'} again
+          </button>
+        )}
+
+        {finder.status === 'done' && finder.results.length > 0 && !finder.collapsed && (
+          <ul class="rounded-xl border border-app-border">
+            {finder.results.map((r, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  class="flex min-h-[52px] w-full flex-col justify-center gap-0.5 border-b border-app-border px-3 py-2 text-left last:border-b-0"
+                  onClick={() => loadSuggestion(r)}
+                  title="Tap to load into the evaluator below"
+                >
+                  <span class="min-w-0 truncate">
+                    <span class="font-bold">Give {r.give.map((p) => p.short).join(' + ')}</span>
+                    <span class="text-app-dim"> ⇄ </span>
+                    <span class="font-bold">Get {r.get.map((p) => p.short).join(' + ')}</span>
+                  </span>
+                  <span class="num truncate text-[13px] text-app-dim">
+                    {teamLabel(ss, r.partnerId)} · you {signed1(r.my.rosDelta)} ROS · them{' '}
+                    {signed1(r.their.rosDelta)}
+                    {marketLabel(r.my.marketDelta) !== null &&
+                      ` · ${marketLabel(r.my.marketDelta)}`}
+                    {` · ${r.fairnessNote}`}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Verdict — recomputes live on every change */}
       {ra && rb ? (

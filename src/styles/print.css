@@ -223,7 +223,7 @@ html.paper-a4 .sheet.landscape { margin: 0 0 0 8.7mm; }
 html.paper-letter .sheet.landscape { margin: 2.9mm 0 0 0; }
 
 /* Sheet rows that may never straddle anything (single-page sheets clip). */
-.oc-cell, .tc-row, .tf-row, .hc-row, .bg-row, .blk-row {
+.oc-cell, .tc-row, .tf-row, .hc-row, .bg-row, .blk-row, .kd-row, .ss-brrow {
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -473,3 +473,192 @@ html.paper-letter .sheet.landscape { margin: 2.9mm 0 0 0; }
 }
 .blk-arrow { font-size: 8pt; } /* snake direction per round row */
 .blk-corner { border: none; }
+
+/* ── S15 K/DST Sheet — two positional tier tables side by side ─────────────
+   Rows reuse the tier-* channels (band + boxed letter + border weight), so
+   the K/DST page speaks the same grayscale language as the big board. */
+.kd-remind {
+  border: 1.5pt solid #000;
+  padding: 2mm 3mm;
+  margin: 1mm 0 3mm;
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.kd-remind-sub { display: block; font-size: 8pt; font-weight: 400; color: #333; margin-top: 0.8mm; }
+.kd-cols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 5mm; }
+.kd-title {
+  font-size: 8.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1pt solid #000;
+  padding-bottom: 0.5mm;
+  margin-bottom: 0.5mm;
+}
+.kd-row {
+  display: grid;
+  /*                    posRk  T    name   tm   bye   pts   adp    ✗  */
+  grid-template-columns: 6mm 3.6mm 1fr 8mm 6mm 9mm 9mm 6mm;
+  align-items: center;
+  font-size: 8.5pt;
+  line-height: 1.4;
+  border-bottom: 0.5pt solid #bbb;
+}
+.kd-hd {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #333;
+  border-left: 3.5pt solid transparent; /* align with the widest tier border */
+  border-bottom: var(--rule-hairline);
+}
+.kd-tier {
+  /* the boxed letter — channel 2, same as .bb-tier */
+  border: 0.5pt solid currentColor;
+  font-size: 6.5pt;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.4;
+  margin: 0.3mm 0.5mm 0.3mm 0.3mm;
+}
+.kd-name { overflow: hidden; white-space: nowrap; padding-right: 0.5mm; }
+.kd-num { text-align: right; padding-right: 1mm; }
+.kd-cb { display: flex; justify-content: center; }
+.kd-cb > span { width: 3mm; height: 3mm; border: 0.5pt solid #000; background: #fff; }
+.kd-cbh { text-align: center; }
+.kd-tierbreak {
+  border-top: var(--rule-tier-break);
+  font-size: 6pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.3mm 0 0.4mm 4mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* ── S16 Strategy Sheet — one page per strategy per slot ─────────────────── */
+.ss { font-size: 9pt; }
+.ss-warn {
+  border: 1.5pt dashed #000;
+  padding: 1.5mm;
+  margin: 1mm 0 2mm;
+  font-size: 9pt;
+  font-weight: 700;
+}
+.ss-h {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #333;
+  border-bottom: 0.5pt solid #000;
+  margin: 3mm 0 1.2mm;
+}
+.ss-none { font-size: 8.5pt; color: #333; font-style: italic; }
+.ss-gapstrip { display: grid; grid-template-columns: repeat(16, 1fr); gap: 0.6mm; }
+.ss-gapcell { border: 0.5pt solid #000; text-align: center; padding: 0.4mm 0; font-size: 7pt; }
+.ss-gapcell b { display: block; font-size: 10pt; }
+.ss-gapcell .g { display: block; font-size: 6.5pt; margin-top: 0.3mm; }
+.ss-gapcell.lg .g { background: #3a3a3a; color: #fff; font-weight: 700; }
+.ss-gapcell.sg .g { background: #e8e8e8; }
+.ss-mult { border: 0.5pt solid #000; }
+.ss-mrow { display: grid; grid-template-columns: 10mm repeat(16, 1fr); }
+.ss-mrow span {
+  border: 0.25pt solid #ccc;
+  font-size: 7pt;
+  text-align: center;
+  line-height: 4.4mm;
+  overflow: hidden;
+}
+.ss-mrow span.lbl { border: none; font-weight: 700; text-align: left; padding-left: 1mm; }
+.ss-mrow span.up { background: #d7d7d7; font-weight: 700; }
+.ss-mrow span.dn { background: #fff; color: #555; }
+.ss-mrow span.lgr { border-bottom: 1.2pt solid #000; } /* long-gap round marker */
+.ss-mhd span { font-size: 6pt; font-weight: 700; text-transform: uppercase; color: #333; }
+.ss-chips { display: flex; flex-wrap: wrap; gap: 1.2mm; }
+.ss-chip { border: 0.75pt solid #000; padding: 0.6mm 2mm; font-size: 8.5pt; font-weight: 700; }
+.ss-override {
+  border: 1.5pt solid #000;
+  padding: 1.2mm 2mm;
+  font-size: 8.5pt;
+  line-height: 1.35;
+  margin-top: 2mm;
+}
+.ss-override b { text-transform: uppercase; letter-spacing: 0.04em; }
+.ss-brrow {
+  display: grid;
+  grid-template-columns: 9mm 60mm 1fr;
+  font-size: 7.5pt;
+  line-height: 1.3;
+  align-items: center;
+  border-bottom: 0.5pt solid #bbb;
+  padding: 0.5mm 0;
+}
+.ss-brrow > span:first-child { text-align: right; padding-right: 1.5mm; font-weight: 700; }
+.ss-brhd {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #333;
+  border-bottom: 1pt solid #000;
+}
+.ss-top3 { padding-right: 1mm; }
+.ss-footnote { font-size: 6.5pt; color: #333; font-style: italic; margin-top: 1.5mm; line-height: 1.35; }
+
+/* ══ COLOR PASS (?mode=color) — ADDITIVE ONLY ════════════════════════════════
+   Every rule below is scoped to html.mode-color, so ?mode=gray output is
+   bit-identical to before this block existed and grayscale legibility never
+   depends on it (the three tier channels + pos letterforms stay authoritative).
+   Position hue comes ONLY from the --pos-* tokens (tokens.css).
+
+   1) Position hue on LEFT borders, consistently across sheets:
+      rows that already carry a tier left border (.bb-row/.kd-row) get it
+      RECOLORED — weight (channel 3) is untouched; rows without one
+      (.tf-row) gain a thin colored edge. */
+html.mode-color .bb-row[data-pos='QB'],
+html.mode-color .kd-row[data-pos='QB'] { border-left-color: var(--pos-qb-hue); }
+html.mode-color .bb-row[data-pos='RB'],
+html.mode-color .kd-row[data-pos='RB'] { border-left-color: var(--pos-rb-hue); }
+html.mode-color .bb-row[data-pos='WR'],
+html.mode-color .kd-row[data-pos='WR'] { border-left-color: var(--pos-wr-hue); }
+html.mode-color .bb-row[data-pos='TE'],
+html.mode-color .kd-row[data-pos='TE'] { border-left-color: var(--pos-te-hue); }
+html.mode-color .bb-row[data-pos='K'],
+html.mode-color .kd-row[data-pos='K'] { border-left-color: var(--pos-k-hue); }
+html.mode-color .bb-row[data-pos='DST'],
+html.mode-color .kd-row[data-pos='DST'] { border-left-color: var(--pos-dst-hue); }
+
+html.mode-color .tf-row[data-pos='QB'] { border-left: 1.1mm solid var(--pos-qb-hue); padding-left: 0.6mm; }
+html.mode-color .tf-row[data-pos='RB'] { border-left: 1.1mm solid var(--pos-rb-hue); padding-left: 0.6mm; }
+html.mode-color .tf-row[data-pos='WR'] { border-left: 1.1mm solid var(--pos-wr-hue); padding-left: 0.6mm; }
+html.mode-color .tf-row[data-pos='TE'] { border-left: 1.1mm solid var(--pos-te-hue); padding-left: 0.6mm; }
+
+/* Single-position tier cards (S6–S9): the whole card gets its position's
+   colored left edge. */
+html.mode-color .tier-card[data-pos='RB'] { border-left: 1.2mm solid var(--pos-rb-hue); }
+html.mode-color .tier-card[data-pos='WR'] { border-left: 1.2mm solid var(--pos-wr-hue); }
+html.mode-color .tier-card[data-pos='TE'] { border-left: 1.2mm solid var(--pos-te-hue); }
+html.mode-color .tier-card[data-pos='QB'] { border-left: 1.2mm solid var(--pos-qb-hue); }
+
+/* S16 multiplier rows: position hue on the row's left edge. */
+html.mode-color .ss-mrow[data-pos='QB'] { border-left: 1.2mm solid var(--pos-qb-hue); }
+html.mode-color .ss-mrow[data-pos='RB'] { border-left: 1.2mm solid var(--pos-rb-hue); }
+html.mode-color .ss-mrow[data-pos='WR'] { border-left: 1.2mm solid var(--pos-wr-hue); }
+html.mode-color .ss-mrow[data-pos='TE'] { border-left: 1.2mm solid var(--pos-te-hue); }
+
+/* 2) Tier chips FILLED in color mode: the boxed letter inverts against its
+      band (dark chip on light A–C bands, light chip on dark D+ bands), so
+      the chip pops without ever being the only tier channel. */
+html.mode-color :is(.tier-a, .tier-b, .tier-c) :is(.bb-tier, .kd-tier) {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+html.mode-color :is(.tier-d, .tier-e, .tier-f, .tier-g, .tier-h) :is(.bb-tier, .kd-tier) {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
