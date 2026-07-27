@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Astrolus/Tailus-derived theme mapping into Tailwind 4 */
+@theme {
+  --color-app-bg: var(--app-bg);
+  --color-app-surface: var(--app-surface);
+  --color-app-border: var(--app-border);
+  --color-app-text: var(--app-text);
+  --color-app-dim: var(--app-text-dim);
+  --color-accent: var(--app-accent);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html {
+  background: var(--app-bg);
+  color: var(--app-text);
+  /* iOS: prevent double-tap zoom + rubber-band chaos on the live board */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* iOS Safari ignores user-scalable=no. The ONLY reliable anti-zoom measure is
+   ≥16px on every input; we use 17px everywhere to keep clear of the cliff. */
+input, select, textarea, button { font-size: 17px; }

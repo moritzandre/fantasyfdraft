@@ -1,0 +1,83 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   tokens.css — THE tier/position/status encoding.
+   Shared by the live app AND every print sheet. This file is the consistency
+   contract between the screen on your lap and the sheet in your hand: change
+   a value here and both change together; there is no second copy anywhere.
+
+   GRAYSCALE FIRST. Tier is encoded by THREE redundant channels so it survives
+   a B&W laser print and colorblindness:
+     1. luminance ramp (relative luminance ≈ .92/.78/.62/.46/.30)
+     2. the tier LETTER rendered in the row
+     3. left-border WEIGHT
+   Position is encoded by boxed letterform + border STYLE, never hue alone.
+   Red/green is never the sole distinction anywhere.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Tier luminance ramp (works in color, survives grayscale) ─────────── */
+  --tier-a-bg: oklch(0.94 0.02 250);   /* ≈ rel. luminance .92 */
+  --tier-b-bg: oklch(0.84 0.04 250);   /* ≈ .78 */
+  --tier-c-bg: oklch(0.72 0.06 250);   /* ≈ .62 */
+  --tier-d-bg: oklch(0.58 0.07 250);   /* ≈ .46 */
+  --tier-e-bg: oklch(0.44 0.06 250);   /* ≈ .30 — text flips to white below .45 */
+  --tier-f-bg: oklch(0.36 0.04 250);
+
+  --tier-a-fg: #111;
+  --tier-b-fg: #111;
+  --tier-c-fg: #111;
+  --tier-d-fg: #fff;
+  --tier-e-fg: #fff;
+  --tier-f-fg: #fff;
+
+  /* Left-border weight per tier — channel 3 */
+  --tier-a-border: 0.75pt;
+  --tier-b-border: 1.25pt;
+  --tier-c-border: 1.75pt;
+  --tier-d-border: 2.25pt;
+  --tier-e-border: 3pt;
+  --tier-f-border: 3.5pt;
+
+  /* ── Position: border STYLE + boxed letterform, hue is decoration ─────── */
+  --pos-rb-style: solid;
+  --pos-wr-style: dashed;
+  --pos-te-style: double;
+  --pos-qb-style: dotted;
+  --pos-k-style:  solid;   /* K/DST get hairline weight instead */
+  --pos-dst-style: solid;
+
+  --pos-rb-hue: oklch(0.55 0.15 150);
+  --pos-wr-hue: oklch(0.55 0.15 250);
+  --pos-te-hue: oklch(0.55 0.15 50);
+  --pos-qb-hue: oklch(0.55 0.15 320);
+  --pos-k-hue:  oklch(0.55 0.02 250);
+  --pos-dst-hue: oklch(0.55 0.02 250);
+
+  /* ── Status glyphs (never color-only) ─────────────────────────────────── */
+  /* injury: ▲ + Q/D/O letter · bye clash: 45° hatch · drafted: strikethrough */
+  --hatch: repeating-linear-gradient(
+    45deg, transparent 0 3px, currentColor 3px 4px);
+
+  /* ── On-the-clock banner: three redundant channels (color+text+size) ──── */
+  --clock-far: oklch(0.65 0.02 250);
+  --clock-near: oklch(0.75 0.15 85);
+  --clock-up: oklch(0.65 0.18 150);
+
+  /* ── App chrome (Astrolus/Tailus-derived dark palette) ────────────────── */
+  --app-bg: oklch(0.18 0.02 265);
+  --app-surface: oklch(0.23 0.02 265);
+  --app-border: oklch(0.32 0.02 265);
+  --app-text: oklch(0.93 0.01 265);
+  --app-text-dim: oklch(0.70 0.01 265);
+  --app-accent: oklch(0.72 0.14 250);
+
+  /* ── Print hairlines: never below 0.5pt, tints never below 5% ─────────── */
+  --rule-hairline: 0.5pt solid #000;
+  --rule-tier-break: 1pt solid #000;
+  --rule-weak-break: 1pt dashed #555; /* TierSep < 1.0 → "treat as one tier" */
+}
+
+/* Grayscale preview: the app toggles this class to proof B&W before printing */
+.grayscale-preview { filter: grayscale(1); }
+
+/* Tabular numerals on every numeric column — ranks align optically */
+.num { font-variant-numeric: tabular-nums; }

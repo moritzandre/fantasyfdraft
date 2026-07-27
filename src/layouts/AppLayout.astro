@@ -1,0 +1,29 @@
+---
+// Derived from Astrolus (Tailus-UI/astro-theme, MIT) Layout.astro,
+// stripped to an app shell: no marketing sections, no font CDN (offline PWA).
+import '../styles/global.css';
+import { pwaInfo } from 'virtual:pwa-info';
+
+interface Props {
+  title?: string;
+}
+const { title = 'DraftPrep — Slot 8' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover: the top bar is safe-area aware on the iPad -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    {pwaInfo && <Fragment set:html={pwaInfo.webManifest.linkTag} />}
+    <script src="/src/pwa.ts"></script>
+  </head>
+  <body class="min-h-dvh bg-app-bg text-app-text antialiased">
+    <slot />
+  </body>
+</html>
