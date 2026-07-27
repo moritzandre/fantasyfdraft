@@ -137,3 +137,30 @@
 
 /* ── Plan B: the printed sheet on-screen, drafted players struck ───────── */
 .lv-planb .bb-row.lv-struck { text-decoration: line-through; opacity: 0.45; }
+
+/* ── Practice mode: MockControls strip (64px) shrinks the grid ─────────── */
+.lv-mock-controls {
+  height: 64px;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+}
+.lv-root[data-practice] .lv-grid {
+  height: calc(100dvh - 72px - 64px - env(safe-area-inset-top));
+}
+@container (max-width: 899px) {
+  .lv-root[data-practice] .lv-grid {
+    height: calc(100dvh - 72px - 64px - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+/* ── League view: live draft grid ─────────────────────────────────────── */
+.lv-grid-me { background: color-mix(in oklab, var(--app-accent) 12%, transparent); }
+.lv-grid-cursor {
+  outline: 2px solid var(--clock-up);
+  outline-offset: -2px;
+  animation: lv-cursor-pulse 1.6s ease-in-out infinite;
+}
+@keyframes lv-cursor-pulse {
+  0%, 100% { outline-color: var(--clock-up); }
+  50% { outline-color: transparent; }
+}

@@ -26,12 +26,30 @@ import type {
   Store,
 } from './store.ts';
 
-export const SNAPSHOT_KEY = 'dp:state:v1';
-export const PICKLOG_KEY = 'dp:picklog:v1';
+// ---------------------------------------------------------------------------
+// Context namespacing. A "context" identifies one independent draft state:
+// '' (the default league, real mode — the LEGACY keys, so pre-context
+// installs keep their state with zero migration), 'mock' (practice mode),
+// 'p-<profileId>' (another league profile), 'p-<profileId>:mock'. Contexts
+// never read or write each other's keys — practice can never touch real
+// draft prep (src/state/profiles.ts builds the context string).
+// ---------------------------------------------------------------------------
+
+export function snapshotKey(ctx = ''): string {
+  return ctx ? `dp:state:${ctx}:v1` : 'dp:state:v1';
+}
+export function picklogKey(ctx = ''): string {
+  return ctx ? `dp:picklog:${ctx}:v1` : 'dp:picklog:v1';
+}
+function idbKey(ctx = ''): string {
+  return ctx ? `state:${ctx}` : 'state';
+}
+
+export const SNAPSHOT_KEY = snapshotKey();
+export const PICKLOG_KEY = picklogKey();
 const PERSIST_ASKED_KEY = 'dp:persistAsked:v1';
 const IDB_NAME = 'dp';
 const IDB_STORE = 'kv';
-const IDB_KEY = 'state';
 /** picklog cap — entries newer than the snapshot are NEVER trimmed (they are
     the torn-write safety net); older ones are only history. */
 const PICKLOG_MAX = 400;
@@ -126,7 +144,7 @@ function trimPicklog(entries: LogEntry[], snapshotRev: number): LogEntry[] {
 // Tier (b): raw-IndexedDB mirror — fire and forget, all failures swallowed.
 // ---------------------------------------------------------------------------
 
-function makeIdbMirror(idb: any): {
+function makeIdbMirror(idb: any, key: string = idbKey()): {
   put(snapshot: PersistedSnapshot): void;
   get(): Promise<PersistedSnapshot | null>;
 } {
@@ -166,7 +184,7 @@ function makeIdbMirror(idb: any): {
         .then((db) => {
           try {
             const tx = db.transaction(IDB_STORE, 'readwrite');
-            tx.objectStore(IDB_STORE).put(JSON.stringify(snapshot), IDB_KEY);
+            tx.objectStore(IDB_STORE).put(JSON.stringify(snapshot), key);
             tx.onerror = () => {};
             tx.onabort = () => {};
           } catch {
@@ -183,7 +201,7 @@ function makeIdbMirror(idb: any): {
             new Promise<PersistedSnapshot | null>((resolve) => {
               try {
                 const tx = db.transaction(IDB_STORE, 'readonly');
-                const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+                const req = tx.objectStore(IDB_STORE).get(key);
                 req.onsuccess = () =>
                   resolve(typeof req.result === 'string' ? parseSnapshot(req.result) : null);
                 req.onerror = () => resolve(null);
@@ -207,13 +225,15 @@ export interface BrowserPersist {
   flush(): void;
 }
 
-export function createBrowserPersist(env: PersistEnv = detectEnv()): BrowserPersist | null {
+export function createBrowserPersist(env: PersistEnv = detectEnv(), ctx = ''): BrowserPersist | null {
   const storage = env.storage ?? null;
   const idb = env.indexedDB ?? null;
   if (!storage && !idb) return null; // nowhere to write
 
-  const mirror = makeIdbMirror(idb);
-  let picklog: LogEntry[] = storage ? parsePicklog(storage.getItem(PICKLOG_KEY)) : [];
+  const SNAP = snapshotKey(ctx);
+  const PLOG = picklogKey(ctx);
+  const mirror = makeIdbMirror(idb, idbKey(ctx));
+  let picklog: LogEntry[] = storage ? parsePicklog(storage.getItem(PLOG)) : [];
   let last: PersistedSnapshot | null = null;
 
   const adapter: PersistAdapter = {
@@ -224,13 +244,13 @@ export function createBrowserPersist(env: PersistEnv = detectEnv()): BrowserPers
         try {
           picklog.push(entry);
           picklog = trimPicklog(picklog, snapshot.rev);
-          storage.setItem(PICKLOG_KEY, JSON.stringify(picklog));
+          storage.setItem(PLOG, JSON.stringify(picklog));
         } catch {
           /* quota — snapshot below may still land */
         }
         // 2. snapshot — SYNCHRONOUS, never debounced
         try {
-          storage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+          storage.setItem(SNAP, JSON.stringify(snapshot));
         } catch {
           /* quota/private mode: IDB mirror still gets it */
         }
@@ -246,7 +266,7 @@ export function createBrowserPersist(env: PersistEnv = detectEnv()): BrowserPers
       if (!last) return;
       if (storage) {
         try {
-          storage.setItem(SNAPSHOT_KEY, JSON.stringify(last));
+          storage.setItem(SNAP, JSON.stringify(last));
         } catch {
           /* swallow */
         }
@@ -262,13 +282,13 @@ export function createBrowserPersist(env: PersistEnv = detectEnv()): BrowserPers
 
 /** Read all three tiers; return the max-rev snapshot plus the picklog tail
     newer than it (or null when nothing was ever persisted). */
-export async function bootRestore(env: PersistEnv = detectEnv()): Promise<RestorePayload | null> {
+export async function bootRestore(env: PersistEnv = detectEnv(), ctx = ''): Promise<RestorePayload | null> {
   const storage = env.storage ?? null;
-  const lsSnap = storage ? parseSnapshot(storage.getItem(SNAPSHOT_KEY)) : null;
+  const lsSnap = storage ? parseSnapshot(storage.getItem(snapshotKey(ctx))) : null;
 
   let idbSnap: PersistedSnapshot | null = null;
   try {
-    idbSnap = await makeIdbMirror(env.indexedDB ?? null).get();
+    idbSnap = await makeIdbMirror(env.indexedDB ?? null, idbKey(ctx)).get();
   } catch {
     idbSnap = null;
   }
@@ -276,7 +296,7 @@ export async function bootRestore(env: PersistEnv = detectEnv()): Promise<Restor
   let snapshot = lsSnap;
   if (idbSnap && (!snapshot || idbSnap.rev > snapshot.rev)) snapshot = idbSnap;
 
-  const picklog = storage ? parsePicklog(storage.getItem(PICKLOG_KEY)) : [];
+  const picklog = storage ? parsePicklog(storage.getItem(picklogKey(ctx))) : [];
   const baseRev = snapshot ? snapshot.rev : 0;
   const tail = picklog.filter((e) => e.rev > baseRev).sort((a, b) => a.rev - b.rev);
 
@@ -332,30 +352,44 @@ export function requestStoragePersist(env: PersistEnv = detectEnv()): void {
     e.g. right after boot or after undoing everything). */
 export function lastSaveInfo(
   env: PersistEnv = detectEnv(),
+  ctx = '',
 ): { rev: number; savedAt: number | null } | null {
   const storage = env.storage ?? null;
-  const snap = storage ? parseSnapshot(storage.getItem(SNAPSHOT_KEY)) : null;
+  const snap = storage ? parseSnapshot(storage.getItem(snapshotKey(ctx))) : null;
   if (!snap) return null;
   const lastTs = snap.log.length > 0 ? snap.log[snap.log.length - 1].ts : 0;
   return { rev: snap.rev, savedAt: Number.isFinite(lastTs) && lastTs > 0 ? lastTs : null };
 }
 
-/** Wipe all persisted draft state (used by RESET flows in dev tools; the
-    normal RESET_DRAFT action is itself persisted and needs no wipe). */
-export function clearPersisted(env: PersistEnv = detectEnv()): void {
+/** Wipe ONE context's persisted draft state (used by RESET flows in dev
+    tools; the normal RESET_DRAFT action is itself persisted and needs no
+    wipe). Record-scoped: deleting the practice context never touches the
+    real one — never deleteDatabase, which would cross-nuke every context. */
+export function clearPersisted(env: PersistEnv = detectEnv(), ctx = ''): void {
   const storage = env.storage ?? null;
   if (storage) {
     try {
-      storage.removeItem(SNAPSHOT_KEY);
-      storage.removeItem(PICKLOG_KEY);
+      storage.removeItem(snapshotKey(ctx));
+      storage.removeItem(picklogKey(ctx));
     } catch {
       /* swallow */
     }
   }
   const idb = env.indexedDB ?? null;
-  if (idb && typeof idb.deleteDatabase === 'function') {
+  if (idb) {
     try {
-      idb.deleteDatabase(IDB_NAME);
+      const req = idb.open(IDB_NAME, 1);
+      req.onsuccess = () => {
+        try {
+          const tx = req.result.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).delete(idbKey(ctx));
+          tx.onerror = () => {};
+          tx.onabort = () => {};
+        } catch {
+          /* swallow */
+        }
+      };
+      req.onerror = () => {};
     } catch {
       /* swallow */
     }
@@ -369,14 +403,15 @@ export function clearPersisted(env: PersistEnv = detectEnv()): void {
 export async function bootPersistedStore(
   boot: { board: Board; league: LeagueConfig },
   env: PersistEnv = detectEnv(),
+  ctx = '',
 ): Promise<Store> {
   let restore: RestorePayload | null = null;
   try {
-    restore = await bootRestore(env);
+    restore = await bootRestore(env, ctx);
   } catch {
     restore = null;
   }
-  const bp = createBrowserPersist(env);
+  const bp = createBrowserPersist(env, ctx);
   const store = createStore({
     board: boot.board,
     league: boot.league,

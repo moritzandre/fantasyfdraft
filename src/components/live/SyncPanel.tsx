@@ -9,6 +9,14 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Board, DraftState, Store, UiState } from '../../state/store';
 import { POLL_MS, fetchDraftsForLeague, pickActiveDraft, syncManager } from '../../sync/sleeper';
 import type { ManagedSyncInfo } from '../../sync/sleeper';
+import {
+  fetchDraft,
+  fetchUserDrafts,
+  isMockDraft,
+  mapDraftToLeague,
+  resolveUser,
+} from '../../sync/sleeperMock';
+import type { AppMode } from '../../state/mode';
 
 /** Subscribe to the app-wide sync manager (shared with the TopBar dot). */
 export function useSyncInfo(): ManagedSyncInfo {
@@ -17,7 +25,17 @@ export function useSyncInfo(): ManagedSyncInfo {
   return info;
 }
 
-export default function SyncPanel({ s, store, board }: { s: DraftState; store: Store; board: Board }) {
+export default function SyncPanel({
+  s,
+  store,
+  board,
+  mode = 'real',
+}: {
+  s: DraftState;
+  store: Store;
+  board: Board;
+  mode?: AppMode;
+}) {
   const info = useSyncInfo();
   const persisted = ((s.ui as Record<string, unknown>).sleeperDraftId as string | undefined) ?? '';
   const [draftId, setDraftId] = useState(info.draftId ?? persisted);
@@ -33,7 +51,63 @@ export default function SyncPanel({ s, store, board }: { s: DraftState; store: S
     if (!id) return;
     persistDraftId(id);
     setNote(null);
-    syncManager.start(store, board, id);
+    // Practice mode tolerates off-board picks (mock rooms draft outside our
+    // board): skip + log instead of pause. Real mode keeps the pause invariant.
+    syncManager.start(store, board, id, {
+      onUnresolvable: mode === 'practice' ? 'skip' : 'pause',
+    });
+  };
+
+  // ── Sleeper MOCK discovery (practice mode only) ─────────────────────────
+  const [username, setUsername] = useState('');
+  const [mockUserId, setMockUserId] = useState<string | null>(null);
+  const [mocks, setMocks] = useState<Array<Record<string, unknown>> | null>(null);
+
+  const findMocks = async () => {
+    const name = username.trim();
+    if (!name) return;
+    setNote('Looking up your Sleeper mock drafts…');
+    setMocks(null);
+    try {
+      const user = await resolveUser(name);
+      setMockUserId(user.userId);
+      const season = String(new Date().getFullYear());
+      const drafts = await fetchUserDrafts(user.userId, season);
+      const found = drafts
+        .filter(isMockDraft)
+        .sort((a: any, b: any) => (b.created ?? 0) - (a.created ?? 0))
+        .slice(0, 6);
+      setMocks(found);
+      setNote(found.length === 0
+        ? `No ${season} mock drafts on that account yet — join a mock lobby in the Sleeper app first.`
+        : `${found.length} mock draft${found.length === 1 ? '' : 's'} found — tap one to track it.`);
+    } catch (e) {
+      setNote(`Mock lookup failed: ${String((e as Error)?.message ?? e)}`);
+    }
+  };
+
+  const trackMock = async (d: Record<string, unknown>) => {
+    const id = String(d.draft_id ?? '');
+    if (!id || !mockUserId) return;
+    setNote('Reading draft settings…');
+    try {
+      const meta = await fetchDraft(id);
+      const mapped = mapDraftToLeague(meta, mockUserId);
+      if ('error' in mapped) {
+        setNote(`Can't track this draft: ${mapped.error}`);
+        return;
+      }
+      store.dispatch({ type: 'SET_LEAGUE', league: mapped.league });
+      setDraftId(id);
+      persistDraftId(id);
+      syncManager.start(store, board, id, { onUnresolvable: 'skip' });
+      setNote(
+        `Tracking mock ${id}.` +
+          (mapped.warnings.length ? ` ⚠ ${mapped.warnings.join(' · ')}` : ''),
+      );
+    } catch (e) {
+      setNote(`Failed to read draft: ${String((e as Error)?.message ?? e)}`);
+    }
   };
 
   const paste = async () => {
@@ -156,7 +230,77 @@ export default function SyncPanel({ s, store, board }: { s: DraftState; store: S
         </div>
       </section>
 
+      {/* Sleeper MOCK drafts — practice mode only: discovery via username
+          (mocks have no league_id, so the league lookup can never find them) */}
+      {mode === 'practice' && (
+        <section class="mt-4 rounded-xl border border-app-border bg-app-surface/50 p-3">
+          <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">
+            SLEEPER MOCK DRAFT (PRACTICE)
+          </h2>
+          <p class="pb-2 text-sm text-app-dim">
+            Join a mock lobby in the Sleeper app, then find it here by username. League shape and
+            your slot are read from the draft; off-board picks are skipped, never fatal.
+          </p>
+          <div class="flex gap-1">
+            <input
+              type="text"
+              autocomplete="off"
+              value={username}
+              placeholder="Sleeper username"
+              aria-label="Sleeper username"
+              onInput={(e: any) => setUsername(e.currentTarget.value)}
+              class="h-14 min-w-0 flex-1 rounded-lg border border-app-border bg-app-bg px-3 text-[17px] outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              class="h-14 shrink-0 rounded-lg border border-app-border bg-app-surface px-4 font-bold"
+              onClick={findMocks}
+              disabled={username.trim() === ''}
+            >
+              Find mocks
+            </button>
+          </div>
+          {mocks && mocks.length > 0 && (
+            <ul class="mt-2 flex flex-col gap-1">
+              {mocks.map((d: any) => (
+                <li>
+                  <button
+                    type="button"
+                    class="flex min-h-14 w-full items-center gap-2 rounded-lg border border-app-border bg-app-bg px-3 text-left"
+                    onClick={() => trackMock(d)}
+                  >
+                    <span class="num min-w-0 flex-1 truncate text-sm">
+                      {String(d.draft_id)}
+                    </span>
+                    <span class="num shrink-0 text-xs text-app-dim">
+                      {d.settings?.teams ?? '?'}-team · {String(d.status ?? '')}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {note && <p class="pt-2 text-sm text-app-dim">{note}</p>}
+
+      {/* Off-board picks skipped this session ('skip' mode) */}
+      {info.offboard && info.offboard.length > 0 && (
+        <section class="mt-3 rounded-lg border border-app-border bg-app-surface p-3 text-sm">
+          <h3 class="pb-1 text-xs font-bold tracking-widest text-app-dim">
+            OFF-BOARD PICKS (SKIPPED)
+          </h3>
+          <ul class="num flex flex-col gap-0.5 text-app-dim">
+            {info.offboard.map((o) => (
+              <li>
+                pick {o.pickNo}: {o.name ?? `player_id ${o.playerId}`}
+                {o.pos ? ` (${o.pos}${o.team ? ` · ${o.team}` : ''})` : ''}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Start / Stop */}
       <section class="mt-4 flex gap-2">

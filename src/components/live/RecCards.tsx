@@ -9,10 +9,13 @@
 // exceeds ε. Tap a card → full term table. Engine throw → Plan B pointer,
 // never a blank screen.
 
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { recommend } from '../../../engine/index.js';
+import { waitWindowThreats } from '../../../engine/insights.js';
 import { abbrevName, fmt1, fmtInt, tierLetter } from '../../../shared/format.js';
 import type { Board, DraftState, Store } from '../../state/store';
+import { loadStrategies } from '../../state/strategies';
+import type { StrategyRegistry } from '../../state/strategies';
 
 interface Shown {
   rec: any;
@@ -79,6 +82,14 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
   const total = s.league.teams * s.league.rounds;
   const [expanded, setExpanded] = useState<number | null>(null);
 
+  // Custom-strategy registry (cached fetch) — recommend() consults it after
+  // the built-ins; null until loaded, which resolveStrategy treats as
+  // built-ins-only.
+  const [registry, setRegistry] = useState<StrategyRegistry | null>(null);
+  useEffect(() => {
+    loadStrategies().then(setRegistry);
+  }, []);
+
   // Previous displayed ordering, for hysteresis + the "changed" dot.
   const prevOrder = useRef<number[] | null>(null);
 
@@ -97,7 +108,7 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
           cursor: s.pickCursor,
           strategy: s.league.strategy,
         },
-        {},
+        { strategies: registry },
       );
     } catch (e: any) {
       return { error: String(e?.message ?? e) } as any;
@@ -132,7 +143,7 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
       changed: changed.has(rec.idx),
     }));
     return { shown, diagnostics: result.diagnostics, slack: result.slack, runFlags: result.runFlags };
-  }, [s.rev]);
+  }, [s.rev, registry]);
 
   if (view.done) {
     return <div class="p-6 text-center text-app-dim">Draft complete — nice work.</div>;
@@ -157,6 +168,29 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
     .filter(([, v]) => v)
     .map(([k]) => k);
 
+  // Wait-window threat strip: the demand pressure specifically between the
+  // cursor and my next pick ("8 picks until yours — 5 still need RB").
+  // Display-only — the score already carries urgency via VONA. Tap → #/league.
+  const threats = useMemo(() => {
+    try {
+      return waitWindowThreats(
+        s.picks.map((p) => ({ n: p.n, idx: p.idx })),
+        s.league,
+        s.pickCursor,
+        board.players,
+      );
+    } catch {
+      return null;
+    }
+  }, [s.rev]);
+  const pressure = threats
+    ? ['RB', 'WR', 'TE', 'QB']
+        .map((pos) => ({ pos, ...threats.posPressure[pos] }))
+        .filter((x) => (x.teamsNeeding?.length ?? 0) > 0)
+        .sort((a, b) => b.picksInWindow - a.picksInWindow)
+        .slice(0, 3)
+    : [];
+
   return (
     <div class="p-2">
       <div class="flex items-center justify-between px-1 pb-1">
@@ -175,6 +209,34 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
           </button>
         </div>
       </div>
+
+      {threats && threats.window.length > 0 && (
+        <a
+          href="#/league"
+          class="mb-2 block rounded-lg border border-app-border bg-app-bg px-2 py-1.5 text-xs text-app-dim"
+          title="League view — all rosters + draft grid"
+        >
+          <span class="font-bold text-app-text">
+            {threats.window.length} pick{threats.window.length === 1 ? '' : 's'} until yours
+          </span>
+          {pressure.length > 0 && (
+            <>
+              {' — '}
+              {pressure.map((x, i) => (
+                <span>
+                  {i > 0 && ' · '}
+                  <b>{x.teamsNeeding.length}</b> team{x.teamsNeeding.length === 1 ? '' : 's'} need{' '}
+                  {x.pos}
+                  {x.pos === pressure[0].pos && x.teamsNeeding.length >= 3 ? ' ⚠' : ''}
+                </span>
+              ))}
+            </>
+          )}
+          {threats.flexOpenInWindow.length > 0 && (
+            <span> · {threats.flexOpenInWindow.length} flex open</span>
+          )}
+        </a>
+      )}
 
       {cards.length === 0 && (
         <p class="p-4 text-app-dim">No candidates — check the pick cursor or roster limits.</p>

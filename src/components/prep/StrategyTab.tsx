@@ -7,10 +7,13 @@
 // and live can never disagree. Priors, not handcuffs: the >overrideDelta
 // conflict rule is stated on every card.
 
+import { useEffect, useState } from 'preact/hooks';
 import { STRATEGIES, multiplierFor } from '../../../engine/strategy.js';
 import { gapsAfter, kappaForRound, myPicks } from '../../../engine/picks.js';
 import { fmt1 } from '../../../shared/format.js';
 import { setStrategy } from '../../state/prefs';
+import { loadStrategies } from '../../state/strategies';
+import type { StrategyRegistry } from '../../state/strategies';
 import type { PrepCtx } from './PrepScreen';
 
 const META: Record<string, [string, string]> = {
@@ -34,6 +37,13 @@ export default function StrategyTab({ ctx }: { ctx: PrepCtx }) {
   const gaps = gapsAfter(picks);
   const longGap = rounds.map((r) => kappaForRound(r, l) > 1.0);
   const active = prefs.strategy ?? l.strategy ?? 'balanced';
+
+  // Built-ins + custom strategies.json specs (same registry recommend() uses).
+  const [registry, setRegistry] = useState<StrategyRegistry | null>(null);
+  useEffect(() => {
+    loadStrategies().then(setRegistry);
+  }, []);
+  const allStrategies = { ...STRATEGIES, ...(registry ?? {}) };
 
   const choose = (name: string) => {
     update((p) => setStrategy(p, name));
@@ -77,8 +87,9 @@ export default function StrategyTab({ ctx }: { ctx: PrepCtx }) {
       </div>
 
       <div class="mt-3 flex flex-col gap-3">
-        {Object.values(STRATEGIES).map((strat: any) => {
-          const [label, blurb] = META[strat.name] ?? [strat.name, ''];
+        {Object.values(allStrategies).map((strat: any) => {
+          const [label, blurb] = META[strat.name]
+            ?? [strat.label ?? strat.name, strat.blurb ?? 'Custom strategy (strategies.json).'];
           const posRows = Object.keys(strat.multipliers);
           const selected = active === strat.name;
           return (

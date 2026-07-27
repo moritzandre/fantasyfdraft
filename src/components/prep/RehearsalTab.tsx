@@ -1,132 +1,107 @@
 // RehearsalTab.tsx — "mock the room": drives the OTHER N−1 seats pick-by-pick
 // through the SAME reducer as real picks (PICK_MADE {source:'sim'}, so every
 // sim pick is individually undoable and lands in the pick log). Opponent
-// choice = the Plackett-Luce first-choice distribution from engine/survival.js
-// (plackettLuceSurvival with G=1: p_i = 1 − s_i = w_i/W), with τ from
-// public/data/opponents.json — adpDiscipline scales the softmax temperature,
-// positionBias/homerTeams shift μ′, reachRounds double τ. MY picks stay
-// manual: the sim pauses whenever my slot is on the clock and points at
-// #/live. Start / Pause / Step + speed slider; reset via 3s HoldButton
-// (RESET_DRAFT) — never a confirm dialog.
+// choice = src/state/mock.ts createMockDriver over engine/opponent.js — the
+// ONE opponent model the offline Monte Carlo (tools/simulate.mjs) samples
+// from, tendencies from public/data/opponents.json, archetype names resolved
+// against public/data/strategies.json. The driver re-derives the room from
+// the store's pick log on every step, so UNDO/EDIT_PICK mid-mock stay
+// coherent; its seed persists in ui.mockSeed so the room's character is
+// stable for the whole mock. MY picks stay manual: the sim pauses whenever my
+// slot is on the clock and points at #/live. Start / Pause / Step + speed
+// slider; reset via 3s HoldButton (RESET_DRAFT + fresh room seed) — never a
+// confirm dialog.
 
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { plackettLuceSurvival } from '../../../engine/survival.js';
+import { defineStrategy } from '../../../engine/strategy.js';
 import { roundForPick, slotForPick } from '../../../engine/picks.js';
 import { abbrevName, fmtAdp } from '../../../shared/format.js';
 import { selectors } from '../../state/store';
-import type { Board, DraftState } from '../../state/store';
+import type { UiState } from '../../state/store';
+import { createMockDriver } from '../../state/mock';
+import type { MockDriver } from '../../state/mock';
 import HoldButton from '../live/HoldButton';
 import type { PrepCtx } from './PrepScreen';
 
-interface Seat {
-  seat: number;
-  name?: string;
-  adpDiscipline?: number;
-  positionBias?: Record<string, number>;
-  homerTeams?: string[];
-  reachRounds?: number[];
-}
-
-const NEUTRAL: Seat = { seat: 0, adpDiscipline: 0.5, positionBias: {}, homerTeams: [], reachRounds: [] };
-const POOL_TOP = 30;
-/** Realistic per-position caps for the opponent model (not my roster rules). */
-const CAPS: Record<string, number> = { QB: 2, TE: 2, K: 1, DST: 1 };
-
-/** Sample ONE opponent pick from the Plackett-Luce first-choice distribution. */
-export function sampleOpponentPick(
-  state: DraftState,
-  board: Board,
-  seats: Seat[],
-  rand: () => number = Math.random,
-): number | null {
-  const l = state.league;
-  const total = l.teams * l.rounds;
-  if (state.pickCursor > total) return null;
-
-  const slot = selectors.onClockSlot(state);
-  const round = roundForPick(state.pickCursor, l.teams);
-  const seat = seats.find((x) => x.seat === slot) ?? NEUTRAL;
-  const counts: Record<string, number> = {};
-  for (const p of selectors.rosterOf(state, board, slot)) counts[p.pos] = (counts[p.pos] ?? 0) + 1;
-
-  let pool = selectors
-    .remainingPool(state, board)
-    .filter((p: any) => Number.isFinite(p.adp?.mu))
-    .filter((p: any) => {
-      const cap = CAPS[p.pos];
-      if (cap && (counts[p.pos] ?? 0) >= cap) return false;
-      // nobody human drafts K/DST before the last few rounds
-      if ((p.pos === 'K' || p.pos === 'DST') && round < l.rounds - 2) return false;
-      return true;
-    })
-    .sort((a: any, b: any) => a.adp.mu - b.adp.mu);
-  if (pool.length === 0) pool = selectors.remainingPool(state, board);
-  if (pool.length === 0) return null;
-
-  const cands = pool.slice(0, POOL_TOP);
-
-  // τ — the local σ̂ of the ADP window, scaled by discipline (0 = wild reacher
-  // → hotter softmax; 1 = strict ADP → colder), doubled in their reach rounds.
-  const sigmas = cands.map((c: any) => c.adp?.sigmaFinal ?? c.adp?.sd ?? 6);
-  const sigBar = sigmas.reduce((a: number, b: number) => a + b, 0) / sigmas.length;
-  let tau = Math.max(1, sigBar) * (1.6 - (seat.adpDiscipline ?? 0.5));
-  if (seat.reachRounds?.includes(round)) tau *= 2;
-
-  // Bias enters as a μ′ shift: μ′ = μ − τ·ln(bias) ⇔ w × bias.
-  const mus = cands.map((c: any) => {
-    let bias = seat.positionBias?.[c.pos] ?? 1;
-    if (seat.homerTeams?.includes(c.team)) bias *= 1.35;
-    return c.adp.mu - tau * Math.log(Math.max(0.05, bias));
-  });
-
-  // One PL round: pick probability p_i = 1 − s_i(G=1) = w_i/W.
-  const surv = plackettLuceSurvival(mus, tau, 1);
-  const probs = surv.map((s: number) => Math.max(0, 1 - s));
-  const sum = probs.reduce((a: number, b: number) => a + b, 0);
-  let r = rand() * (sum > 0 ? sum : 1);
-  for (let i = 0; i < cands.length; i++) {
-    r -= probs[i];
-    if (r <= 0) return cands[i].idx;
-  }
-  return cands[0].idx;
+interface Room {
+  opponents: unknown; // parsed opponents.json (null ⇒ neutral defaults)
+  strategies: Record<string, object> | null; // defineStrategy registry
 }
 
 export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
-  const { s, store, derived } = ctx;
+  const { s, store, board, derived } = ctx;
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(700); // ms between opponent picks
-  const [seats, setSeats] = useState<Seat[]>([]);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [roomRev, setRoomRev] = useState(0); // bumped by reset → new driver
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    fetch(import.meta.env.BASE_URL + 'data/opponents.json')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((o) => {
-        if (Array.isArray(o?.seats)) setSeats(o.seats);
-      })
-      .catch(() => {}); // neutral defaults still work
+    let alive = true;
+    const grab = (file: string) =>
+      fetch(import.meta.env.BASE_URL + 'data/' + file)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null); // neutral defaults still work offline
+    Promise.all([grab('opponents.json'), grab('strategies.json')]).then(([opp, strat]) => {
+      if (!alive) return;
+      // Invalid custom specs are dropped with a warning, never fatal
+      // (strategies.json contract) — archetype resolution falls back below.
+      const registry: Record<string, object> = {};
+      for (const spec of (strat as { strategies?: object[] } | null)?.strategies ?? []) {
+        try {
+          const d = defineStrategy(spec);
+          registry[(d as { name: string }).name] = d;
+        } catch (e) {
+          console.warn('rehearsal: dropped invalid strategy spec —', e);
+        }
+      }
+      setRoom({ opponents: opp, strategies: Object.keys(registry).length ? registry : null });
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const l = s.league;
+
+  // The driver captures league (teams/rounds) and the board at creation —
+  // rebuild it whenever they change, when the room data lands, or after a
+  // reset (roomRev). Fallbacks, visibly (console.warn), never mid-draft:
+  //   1. derived board + full archetype mix (the normal path)
+  //   2. archetypes stripped (strategies.json missing/invalid ⇒ unknown names)
+  //   3. RAW board (a prep ADP override can break the ctx's ADP-order assert)
+  const driver = useMemo<MockDriver | null>(() => {
+    if (!room) return null;
+    const opp = room.opponents as Record<string, unknown> | null;
+    const attempts: Array<[string, unknown, unknown]> = [
+      ['full', derived, opp],
+      ['no archetypes', derived, opp ? { ...opp, archetypes: null } : null],
+      ['raw board', board, opp],
+      ['raw board, no archetypes', board, opp ? { ...opp, archetypes: null } : null],
+    ];
+    for (const [label, b, o] of attempts) {
+      try {
+        const d = createMockDriver(store, b as typeof board, o, { strategies: room.strategies });
+        if (label !== 'full') console.warn(`rehearsal: opponent model degraded to "${label}"`);
+        return d;
+      } catch (e) {
+        console.warn(`rehearsal: driver "${label}" failed —`, e);
+      }
+    }
+    return null;
+  }, [room, roomRev, derived, board, store, l.teams, l.rounds]);
+
   const total = l.teams * l.rounds;
   const over = s.pickCursor > total;
   const myTurn = selectors.isMyPick(s);
   const round = roundForPick(Math.min(s.pickCursor, total), l.teams);
 
-  const step = (): boolean => {
-    const state = store.getState();
-    if (state.pickCursor > state.league.teams * state.league.rounds) return false;
-    if (selectors.isMyPick(state)) return false; // my picks stay manual (#/live)
-    const idx = sampleOpponentPick(state, derived, seats);
-    if (idx == null) return false;
-    store.dispatch({ type: 'PICK_MADE', idx, source: 'sim' });
-    return true;
-  };
+  const step = (): boolean => driver?.step() ?? false;
 
-  // Interval loop — reads fresh state from the store each tick, pauses itself
-  // the moment I'm on the clock or the draft ends.
+  // Interval loop — the driver reads fresh state from the store each tick,
+  // pauses itself the moment I'm on the clock or the draft ends.
   useEffect(() => {
-    if (!running) return;
+    if (!running || !driver) return;
     timer.current = setInterval(() => {
       if (!step()) setRunning(false);
     }, speed);
@@ -134,19 +109,29 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
       if (timer.current) clearInterval(timer.current);
       timer.current = null;
     };
-  }, [running, speed, seats, derived]);
+  }, [running, speed, driver]);
 
   const simPicks = useMemo(
     () => s.picks.filter((p) => p.source === 'sim').slice(-10).reverse(),
     [s.rev],
   );
 
+  // This mock's drawn room character — seats whose archetype deviates from
+  // the balanced default (null/balanced seats stay quiet).
+  const roomCharacter = useMemo(() => {
+    if (!driver) return [];
+    return driver
+      .seatArchetypes()
+      .filter((e) => e.archetype !== null && e.archetype !== 'balanced' && e.slot !== l.slot);
+  }, [driver, l.slot]);
+
   return (
     <div class="mx-auto max-w-2xl px-3 pb-16">
       <p class="py-2 text-sm text-app-dim">
-        The other {l.teams - 1} seats draft themselves (Plackett-Luce over ADP, tendencies from
-        opponents.json). Sim picks go through the normal reducer — each one is undoable, and RESET
-        wipes the rehearsal. <b class="text-app-text">Your picks stay manual on the Live screen.</b>
+        The other {l.teams - 1} seats draft themselves through the same opponent model as the Monte
+        Carlo (Plackett-Luce over ADP, tendencies + archetypes from opponents.json). Sim picks go
+        through the normal reducer — each one is undoable, and RESET wipes the rehearsal.{' '}
+        <b class="text-app-text">Your picks stay manual on the Live screen.</b>
       </p>
 
       <div class="num rounded-lg border border-app-border bg-app-surface p-3 text-center">
@@ -160,6 +145,11 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
               ? `slot ${l.slot} (YOU) on the clock`
               : `slot ${selectors.onClockSlot(s)} on the clock · ${s.picks.length} recorded`}
         </div>
+        {roomCharacter.length > 0 && (
+          <div class="num pt-1 text-xs text-app-dim">
+            Room: {roomCharacter.map((e) => `s${e.slot} ${e.archetype}`).join(' · ')}
+          </div>
+        )}
       </div>
 
       {myTurn && !over && (
@@ -174,15 +164,15 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
           class={`min-h-14 flex-1 rounded-xl font-bold ${
             running ? 'lv-clock-near' : 'bg-accent text-app-bg'
           } disabled:opacity-40`}
-          disabled={over || (myTurn && !running)}
+          disabled={!driver || over || (myTurn && !running)}
           onClick={() => setRunning(!running)}
         >
-          {running ? 'Pause' : 'Start'}
+          {driver ? (running ? 'Pause' : 'Start') : 'Loading room…'}
         </button>
         <button
           type="button"
           class="min-h-14 flex-1 rounded-xl border border-app-border bg-app-surface font-bold disabled:opacity-40"
-          disabled={over || myTurn || running}
+          disabled={!driver || over || myTurn || running}
           onClick={step}
         >
           Step (1 pick)
@@ -226,6 +216,10 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
           onHold={() => {
             setRunning(false);
             store.dispatch({ type: 'RESET_DRAFT' });
+            // Clear the persisted room seed so the NEXT mock draws a fresh
+            // room; roomRev forces a new driver over the fresh seed.
+            store.dispatch({ type: 'SET_UI', ui: { mockSeed: undefined } as unknown as Partial<UiState> });
+            setRoomRev((r) => r + 1);
           }}
           class="min-h-14 w-full rounded-xl border border-app-border bg-app-surface font-bold text-app-dim"
         >

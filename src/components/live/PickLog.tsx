@@ -140,13 +140,15 @@ export default function PickLog({ s, store, board }: { s: DraftState; store: Sto
                   <span class="num w-14 shrink-0 text-sm text-app-dim">
                     R{roundForPick(entry.n, s.league.teams)}·{entry.n}
                   </span>
-                  <span
+                  <a
+                    href="#/league"
                     class={`num w-11 shrink-0 rounded px-1 text-center text-xs font-bold ${
                       teamLabel(entry.n) === 'YOU' ? 'bg-accent text-app-bg' : 'bg-app-bg text-app-dim'
                     }`}
+                    title="League view"
                   >
                     {teamLabel(entry.n)}
-                  </span>
+                  </a>
                   <span class="min-w-0 flex-1 truncate font-semibold">
                     {p ? abbrevName(p.name, 20) : `#${entry.idx}?`}
                     <span class="num ml-2 text-xs text-app-dim">

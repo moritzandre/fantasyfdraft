@@ -4,24 +4,28 @@
 // teams segmented control, rounds, roster ± steppers, strategy picker with
 // one-line descriptions, snake toggle, and a 3s-hold reset (no dialogs).
 
+import { useEffect, useState } from 'preact/hooks';
 import { gapsAfter, myPicks } from '../../../engine/picks.js';
 import type { DraftState, Store } from '../../state/store';
+import { loadStrategies, strategyList } from '../../state/strategies';
+import type { StrategyRegistry } from '../../state/strategies';
 import HoldButton from './HoldButton';
 
 const TEAM_OPTIONS = [8, 10, 12, 14];
 const ROSTER_ORDER = ['QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST', 'BN'];
-const STRATEGIES: [string, string, string][] = [
-  ['balanced', 'Balanced / BPA', 'Pure tier discipline — the most robust default.'],
-  ['anchor_rb', 'Hero / Anchor RB', 'One elite RB, then pass-catchers; RB again R6–9.'],
-  ['zero_rb_mod', 'Modified Zero RB', 'No RB before R4 — load WR/TE while RBs fly.'],
-  ['robust_rb', 'Robust RB', '2 RB by R3, 3 by R5 — volume early (weakest late-slot).'],
-];
 
 export default function SetupScreen({ s, store }: { s: DraftState; store: Store }) {
   const { dispatch } = store;
   const l = s.league;
   const picks = myPicks(l);
   const gaps = gapsAfter(picks);
+
+  // Built-ins + custom strategies.json entries (loaded once, cached).
+  const [registry, setRegistry] = useState<StrategyRegistry | null>(null);
+  useEffect(() => {
+    loadStrategies().then(setRegistry);
+  }, []);
+  const strategies = strategyList(registry);
 
   const setLeague = (league: Record<string, unknown>) => dispatch({ type: 'SET_LEAGUE', league });
   const setRoster = (pos: string, delta: number) => {
@@ -165,7 +169,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
       <section class="mt-4">
         <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">STRATEGY</h2>
         <div class="flex flex-col gap-1">
-          {STRATEGIES.map(([id, label, blurb]) => (
+          {strategies.map(({ name: id, label, blurb, custom }) => (
             <button
               type="button"
               class={`min-h-14 rounded-lg border px-3 py-2 text-left ${
@@ -178,6 +182,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
               <span class="font-bold">
                 {(l.strategy ?? 'balanced') === id ? '● ' : '○ '}
                 {label}
+                {custom && <span class="ml-2 rounded bg-app-border px-1.5 text-xs font-normal">custom</span>}
               </span>
               <span class="ml-2 text-sm text-app-dim">{blurb}</span>
             </button>

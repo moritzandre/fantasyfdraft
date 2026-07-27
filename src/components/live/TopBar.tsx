@@ -112,6 +112,16 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
         <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">{dotLabel}</span>
       </button>
 
+      <a
+        href="#/league"
+        class="flex h-14 min-w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-app-border bg-app-surface px-1 font-bold"
+        title="League — all rosters + draft grid"
+        aria-label="League view"
+      >
+        <span class="text-sm">LG</span>
+        <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">LEAGUE</span>
+      </a>
+
       <input
         type="search"
         value={q}

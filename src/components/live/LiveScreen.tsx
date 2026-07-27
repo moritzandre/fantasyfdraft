@@ -7,8 +7,10 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import type { Board, DraftState, Store } from '../../state/store';
+import type { AppMode } from '../../state/mode';
 import { enableWakeLock } from '../../ui/wakelock';
 import BoardList from './BoardList';
+import MockControls from './MockControls';
 import RecCards from './RecCards';
 import RosterRail from './RosterRail';
 import TopBar from './TopBar';
@@ -19,14 +21,29 @@ const TABS: [string, string][] = [
   ['team', 'My Team'],
 ];
 
-export default function LiveScreen({ s, store, board }: { s: DraftState; store: Store; board: Board }) {
+export default function LiveScreen({
+  s,
+  store,
+  board,
+  mode = 'real',
+}: {
+  s: DraftState;
+  store: Store;
+  board: Board;
+  mode?: AppMode;
+}) {
   const [tab, setTab] = useState<'board' | 'recs' | 'team'>('recs');
 
   useEffect(() => enableWakeLock(), []);
 
+  // Practice-only: the MockControls strip. Real mode renders byte-identical
+  // #/live — draft day never sees any of this.
+  const practice = mode === 'practice';
+
   return (
-    <div class="lv-root" data-tab={tab}>
+    <div class="lv-root" data-tab={tab} data-practice={practice ? '' : undefined}>
       <TopBar s={s} store={store} />
+      {practice && <MockControls s={s} store={store} board={board} />}
       <div class="lv-grid">
         <section class="lv-panel lv-panel-team">
           <RosterRail s={s} store={store} board={board} />

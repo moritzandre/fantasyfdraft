@@ -223,6 +223,102 @@ test('unresolvable player_id pauses sync without advancing the cursor past it', 
   assert.equal(sync.info().status, 'stopped');
 });
 
+test("default opts (no onUnresolvable) still pause — offboard stays empty", async () => {
+  const timers = makeTimers();
+  const { fn } = fetchMock(() =>
+    resOk([
+      { pick_no: 1, player_id: '100' },
+      { pick_no: 2, player_id: '999', metadata: { first_name: 'Off', last_name: 'Board' } },
+    ]),
+  );
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, { ...baseOpts(timers), fetchFn: fn });
+  await settle();
+
+  // exact pre-existing pause semantics: banner + pause, cursor untouched
+  const i = sync.info();
+  assert.equal(i.paused, true);
+  assert.equal(i.status, 'error');
+  assert.equal(i.unresolved, '999');
+  assert.deepEqual(i.offboard, []); // 'skip' bookkeeping never engages by default
+  assert.equal(store.getState().pickCursor, 2);
+  sync.stop();
+});
+
+test("'skip' mode records around an off-board pick, keeps status live, keeps polling", async () => {
+  const timers = makeTimers();
+  const statuses: SyncInfo[] = [];
+  const { fn, calls } = fetchMock(() =>
+    resOk([
+      { pick_no: 1, player_id: '100' },
+      {
+        pick_no: 2,
+        player_id: '999', // not in slimSleeperMap — off the 395-player board
+        metadata: { first_name: 'Zed', last_name: 'Obscure', position: 'QB', team: 'JAX' },
+      },
+      { pick_no: 3, player_id: '102' },
+    ]),
+  );
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, {
+    ...baseOpts(timers, statuses),
+    fetchFn: fn,
+    onUnresolvable: 'skip',
+  });
+  await settle();
+
+  let s = store.getState();
+  assert.deepEqual(
+    s.picks.map((p) => [p.n, p.idx, p.source]),
+    [
+      [1, 0, 'sleeper'],
+      [3, 2, 'sleeper'], // pick 3 lands at n=3 — the skipped pick 2 stays a hole
+    ],
+  );
+  assert.equal(s.pickCursor, 4); // cursor advanced PAST the off-board pick
+  const i = sync.info();
+  assert.equal(i.status, 'live');
+  assert.equal(i.paused, false);
+  assert.equal(i.error, null);
+  assert.equal(i.pickCount, 2);
+  assert.deepEqual(i.offboard, [
+    { pickNo: 2, playerId: '999', name: 'Zed Obscure', pos: 'QB', team: 'JAX' },
+  ]);
+  assert.equal(timers.size(), 1); // still polling — never paused
+  assert.equal(statuses[statuses.length - 1].status, 'live');
+
+  // next poll, identical payload: pick 2 is behind the cursor → never reprocessed
+  timers.runNext();
+  await settle();
+  s = store.getState();
+  assert.equal(calls.length, 2);
+  assert.equal(s.picks.length, 2);
+  assert.equal(s.pickCursor, 4);
+  assert.equal(sync.info().offboard.length, 1); // not logged twice
+  assert.equal(sync.info().status, 'live');
+  sync.stop();
+});
+
+test("'skip' with metadata absent records nulls and does not crash", async () => {
+  const timers = makeTimers();
+  const { fn } = fetchMock(() => resOk([{ pick_no: 1, player_id: '888' }]));
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, {
+    ...baseOpts(timers),
+    fetchFn: fn,
+    onUnresolvable: 'skip',
+  });
+  await settle();
+
+  assert.equal(store.getState().picks.length, 0);
+  assert.equal(store.getState().pickCursor, 2);
+  assert.deepEqual(sync.info().offboard, [
+    { pickNo: 1, playerId: '888', name: null, pos: null, team: null },
+  ]);
+  assert.equal(sync.info().status, 'live');
+  sync.stop();
+});
+
 test('stop() aborts the in-flight fetch and schedules nothing more', async () => {
   const timers = makeTimers();
   const statuses: SyncInfo[] = [];

@@ -13,6 +13,10 @@
 //   - Unresolvable player_id (not in board.slimSleeperMap): surface a one-line
 //     banner naming the Sleeper player_id, do NOT advance the cursor for it,
 //     log and PAUSE sync — manual entry is the fallback, Start resumes.
+//     That is the DEFAULT (onUnresolvable: 'pause' — the real-draft invariant).
+//     Mock rooms draft outside our 395-player board, so 'skip' instead logs the
+//     off-board pick (SyncInfo.offboard), advances the cursor past it via
+//     SET_PICK_CURSOR, and keeps polling — never pauses, never errors.
 //   - stop() aborts the in-flight fetch and cancels the pending timer cleanly.
 //
 // Everything impure is injectable (fetch, timers, clock, RNG) so the whole
@@ -27,6 +31,16 @@ import type { Board, Store } from '../state/store';
 // ---------------------------------------------------------------------------
 
 export type SyncStatus = 'live' | 'error' | 'stopped';
+
+/** One pick skipped in 'skip' mode — a player outside the board (mock rooms).
+    name/pos/team come from the Sleeper pick's `metadata`, null when absent. */
+export interface OffboardPick {
+  pickNo: number;
+  playerId: string;
+  name: string | null;
+  pos: string | null;
+  team: string | null;
+}
 
 export interface SyncInfo {
   status: SyncStatus;
@@ -44,11 +58,17 @@ export interface SyncInfo {
   unresolved: string | null;
   /** True when sync paused itself on an unresolvable player_id. */
   paused: boolean;
+  /** Off-board picks skipped by THIS instance ('skip' mode only; default []). */
+  offboard: OffboardPick[];
 }
 
 export interface SleeperSyncOpts {
   draftId: string;
   onStatus?: (info: SyncInfo) => void;
+  /** Off-board player_id policy: 'pause' (default — the real-draft invariant:
+      banner + pause, cursor untouched) or 'skip' (mock drafts: record it in
+      SyncInfo.offboard, advance the cursor past it, keep polling). */
+  onUnresolvable?: 'pause' | 'skip';
   // injectables — defaults are the real browser/node globals
   fetchFn?: (input: string, init?: RequestInit) => Promise<Response>;
   setTimeoutFn?: (fn: () => void, ms: number) => unknown;
@@ -84,6 +104,7 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
   const random = opts.random ?? Math.random;
   const base = opts.intervalMs ?? POLL_MS;
   const maxBackoff = opts.maxBackoffMs ?? MAX_BACKOFF_MS;
+  const onUnresolvable = opts.onUnresolvable ?? 'pause';
   const slimMap = (board.slimSleeperMap ?? {}) as Record<string, number>;
 
   const info: SyncInfo = {
@@ -95,6 +116,7 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
     error: null,
     unresolved: null,
     paused: false,
+    offboard: [],
   };
 
   let dead = false; // set by stop() and by the unresolvable-id pause
@@ -150,6 +172,32 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
       const pid = String(p.player_id ?? '');
       const idx = slimMap[pid];
       if (!Number.isInteger(idx)) {
+        if (onUnresolvable === 'skip') {
+          // Off-board (mock rooms draft outside the 395-player board): log it,
+          // advance the cursor past this pick number, keep going. The cursor
+          // moves through the reducer; next poll's `pickNo < startCursor`
+          // guard then keeps this pick from ever being reprocessed.
+          const md = (p.metadata ?? null) as Record<string, unknown> | null;
+          const first = md && typeof md.first_name === 'string' ? md.first_name : '';
+          const last = md && typeof md.last_name === 'string' ? md.last_name : '';
+          const name = `${first} ${last}`.trim() || null;
+          info.offboard = [
+            ...info.offboard,
+            {
+              pickNo,
+              playerId: pid,
+              name,
+              pos: md && typeof md.position === 'string' ? md.position : null,
+              team: md && typeof md.team === 'string' ? md.team : null,
+            },
+          ];
+          // never move the cursor BACKWARD (a manually-recorded later pick may
+          // already have landed it past this number)
+          if (s.pickCursor <= pickNo) {
+            store.dispatch({ type: 'SET_PICK_CURSOR', pick: pickNo + 1 });
+          }
+          continue;
+        }
         // Unresolvable: banner + pause, cursor NOT advanced for this pick.
         info.unresolved = pid;
         info.status = 'error';
@@ -260,7 +308,12 @@ export interface ManagedSyncInfo extends SyncInfo {
 }
 
 export interface SyncManager {
-  start(store: Store, board: Board, draftId: string): void;
+  start(
+    store: Store,
+    board: Board,
+    draftId: string,
+    opts?: { onUnresolvable?: 'pause' | 'skip' },
+  ): void;
   stop(): void;
   getInfo(): ManagedSyncInfo;
   subscribe(fn: (info: ManagedSyncInfo) => void): () => void;
@@ -278,6 +331,7 @@ function createManager(): SyncManager {
     error: null,
     unresolved: null,
     paused: false,
+    offboard: [],
   };
   const subs = new Set<(info: ManagedSyncInfo) => void>();
 
@@ -296,7 +350,7 @@ function createManager(): SyncManager {
   }
 
   return {
-    start(store: Store, board: Board, id: string): void {
+    start(store: Store, board: Board, id: string, opts?: { onUnresolvable?: 'pause' | 'skip' }): void {
       if (inst) {
         inst.stop();
         inst = null;
@@ -308,6 +362,7 @@ function createManager(): SyncManager {
       }
       inst = createSleeperSync(store, board, {
         draftId,
+        onUnresolvable: opts?.onUnresolvable,
         onStatus: (i) => {
           last = i;
           notify();
