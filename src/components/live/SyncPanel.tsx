@@ -9,6 +9,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Board, DraftState, Store, UiState } from '../../state/store';
 import { POLL_MS, fetchDraftsForLeague, pickActiveDraft, syncManager } from '../../sync/sleeper';
 import type { ManagedSyncInfo } from '../../sync/sleeper';
+import { syncStartOpts } from '../../state/syncResume';
 import {
   fetchDraft,
   fetchUserDrafts,
@@ -44,19 +45,35 @@ export default function SyncPanel({
   const [note, setNote] = useState<string | null>(null);
   const running = info.status !== 'stopped';
 
-  const persistDraftId = (v: string) =>
-    store.dispatch({ type: 'SET_UI', ui: { sleeperDraftId: v } as unknown as Partial<UiState> });
+  /** Practice-only clean slate before pointing sync at a NEW draft: stop the
+      old loop, wipe the old mock's picks and its room seed/label — remnants
+      of the previous draft must never mix into the synced one. */
+  const wipePracticeDraft = () => {
+    syncManager.stop();
+    store.dispatch({ type: 'RESET_DRAFT' });
+    store.dispatch({
+      type: 'SET_UI',
+      ui: { mockSeed: undefined, mockLabel: undefined } as unknown as Partial<UiState>,
+    });
+  };
 
   const start = () => {
     const id = draftId.trim();
     if (!id) return;
-    persistDraftId(id);
     setNote(null);
+    // Same id as the last synced draft = resume (picks kept). A DIFFERENT id
+    // in practice mode gets the clean-slate treatment — never in real mode,
+    // where the recorded picks are the actual draft.
+    if (mode === 'practice' && id !== persisted) wipePracticeDraft();
+    // syncAutoResume rides every Start and is only cleared by the explicit
+    // Stop button — a reload mid-draft restarts sync (LiveApp maybeResumeSync).
+    store.dispatch({
+      type: 'SET_UI',
+      ui: { sleeperDraftId: id, syncAutoResume: true } as unknown as Partial<UiState>,
+    });
     // Practice mode tolerates off-board picks (mock rooms draft outside our
     // board): skip + log instead of pause. Real mode keeps the pause invariant.
-    syncManager.start(store, board, id, {
-      onUnresolvable: mode === 'practice' ? 'skip' : 'pause',
-    });
+    syncManager.start(store, board, id, syncStartOpts(mode));
   };
 
   // ── Sleeper MOCK discovery (practice mode only) ─────────────────────────
@@ -98,10 +115,21 @@ export default function SyncPanel({
         setNote(`Can't track this draft: ${mapped.error}`);
         return;
       }
+      // Clean slate FIRST (stop sync → RESET_DRAFT → clear seed/label): the
+      // previous mock's picks must be gone before the new league shape and
+      // the first synced pick land — no remnants mixing into this draft.
+      wipePracticeDraft();
       store.dispatch({ type: 'SET_LEAGUE', league: mapped.league });
       setDraftId(id);
-      persistDraftId(id);
-      syncManager.start(store, board, id, { onUnresolvable: 'skip' });
+      store.dispatch({
+        type: 'SET_UI',
+        ui: {
+          sleeperDraftId: id,
+          mockLabel: `Sleeper mock ${id}`,
+          syncAutoResume: true,
+        } as unknown as Partial<UiState>,
+      });
+      syncManager.start(store, board, id, syncStartOpts('practice'));
       setNote(
         `Tracking mock ${id}.` +
           (mapped.warnings.length ? ` ⚠ ${mapped.warnings.join(' · ')}` : ''),
@@ -144,16 +172,31 @@ export default function SyncPanel({
     }
   };
 
+  // 1s re-render while running so the next-poll countdown actually counts.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+
   const sleeperCount = s.picks.filter((p) => p.source === 'sleeper').length;
   const lastPoll =
     info.lastPollAt === null ? 'never' : new Date(info.lastPollAt).toLocaleTimeString();
+  const nextIn =
+    info.nextPollAt === null
+      ? null
+      : Math.max(0, Math.ceil((info.nextPollAt - Date.now()) / 1000));
   let statusLine = 'MANUAL — picks are entered by tapping the board.';
-  if (info.status === 'live') statusLine = `LIVE — polling every ${Math.round(info.backoffMs / 1000)}s.`;
+  if (info.status === 'live')
+    statusLine = `LIVE — polling every ${Math.round(info.backoffMs / 1000)}s${
+      nextIn !== null ? ` · next in ${nextIn}s` : ''
+    }.`;
   else if (info.status === 'error' && info.paused) statusLine = 'PAUSED on an unresolved player — see below.';
   else if (info.status === 'error')
-    statusLine = `OFFLINE — ${info.error ?? 'poll failed'} · retrying in ~${Math.round(info.backoffMs / 1000)}s${
-      info.backoffMs > POLL_MS ? ' (backing off)' : ''
-    }.`;
+    statusLine = `OFFLINE — ${info.error ?? 'poll failed'} · retrying in ~${
+      nextIn !== null ? nextIn : Math.round(info.backoffMs / 1000)
+    }s${info.backoffMs > POLL_MS ? ' (backing off)' : ''}.`;
 
   return (
     <main class="mx-auto max-w-xl px-4 pb-16">
@@ -320,7 +363,15 @@ export default function SyncPanel({
         <button
           type="button"
           class="h-14 flex-1 rounded-lg border border-app-border bg-app-surface px-4 font-bold"
-          onClick={() => syncManager.stop()}
+          onClick={() => {
+            // Explicit Stop is the ONE gesture that also clears the
+            // auto-resume flag — a reload after this stays stopped.
+            syncManager.stop();
+            store.dispatch({
+              type: 'SET_UI',
+              ui: { syncAutoResume: false } as unknown as Partial<UiState>,
+            });
+          }}
           disabled={!running}
         >
           Stop

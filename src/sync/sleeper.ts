@@ -18,6 +18,10 @@
 //     off-board pick (SyncInfo.offboard), advances the cursor past it via
 //     SET_PICK_CURSOR, and keeps polling — never pauses, never errors.
 //   - stop() aborts the in-flight fetch and cancels the pending timer cleanly.
+//   - visibilitychange→visible polls IMMEDIATELY (injectable doc, persist.ts
+//     attachLifecycle pattern) — returning to the tab never waits out a timer
+//     or a 30s backoff. Guarded: dead/paused instances and in-flight polls
+//     never double-fire; halt() detaches the listener.
 //
 // Everything impure is injectable (fetch, timers, clock, RNG) so the whole
 // loop runs under `node --test` with fake timers. No preact imports here —
@@ -46,6 +50,9 @@ export interface SyncInfo {
   status: SyncStatus;
   /** ms epoch of the last poll attempt (null before the first). */
   lastPollAt: number | null;
+  /** ms epoch the next poll is scheduled for (null while stopped, paused,
+      or mid-poll) — lets the UI render a countdown. */
+  nextPollAt: number | null;
   /** Picks dispatched via sync by THIS instance. */
   pickCount: number;
   /** Delay before the next poll (base 3000; grows on error up to 30000). */
@@ -77,6 +84,15 @@ export interface SleeperSyncOpts {
   random?: () => number;
   intervalMs?: number;
   maxBackoffMs?: number;
+  /** document host for the visibilitychange fast-poll (persist.ts
+      attachLifecycle pattern): coming back to a visible tab polls NOW instead
+      of waiting out the timer or a long error backoff. Injectable for tests;
+      pass null to disable. Default = the real global document. */
+  doc?: {
+    visibilityState?: string;
+    addEventListener(type: string, fn: () => void): void;
+    removeEventListener(type: string, fn: () => void): void;
+  } | null;
 }
 
 export interface SleeperSync {
@@ -87,7 +103,19 @@ export interface SleeperSync {
 
 export const SLEEPER_API = 'https://api.sleeper.app/v1';
 export const POLL_MS = 3000;
+/** Faster cadence for PRACTICE syncs (tracked Sleeper mock lobbies move
+    quickly and nothing is at stake) — real mode always keeps POLL_MS. */
+export const MOCK_POLL_MS = 2000;
 export const MAX_BACKOFF_MS = 30000;
+
+function defaultDoc(): SleeperSyncOpts['doc'] {
+  const d = (globalThis as { document?: unknown }).document as
+    | { addEventListener?: unknown }
+    | undefined;
+  return d && typeof d.addEventListener === 'function'
+    ? (d as NonNullable<SleeperSyncOpts['doc']>)
+    : null;
+}
 
 // ---------------------------------------------------------------------------
 // Core poll loop
@@ -105,11 +133,13 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
   const base = opts.intervalMs ?? POLL_MS;
   const maxBackoff = opts.maxBackoffMs ?? MAX_BACKOFF_MS;
   const onUnresolvable = opts.onUnresolvable ?? 'pause';
+  const doc = opts.doc !== undefined ? opts.doc : defaultDoc();
   const slimMap = (board.slimSleeperMap ?? {}) as Record<string, number>;
 
   const info: SyncInfo = {
     status: 'stopped',
     lastPollAt: null,
+    nextPollAt: null,
     pickCount: 0,
     backoffMs: base,
     polls: 0,
@@ -135,6 +165,7 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
   /** Shared teardown: cancel the pending timer and abort any in-flight fetch. */
   function halt(): void {
     dead = true;
+    info.nextPollAt = null;
     if (timer !== null) {
       clearT(timer);
       timer = null;
@@ -142,6 +173,13 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
     if (ctrl) {
       ctrl.abort();
       ctrl = null;
+    }
+    if (doc) {
+      try {
+        doc.removeEventListener('visibilitychange', onVisibility);
+      } catch {
+        /* teardown must never throw */
+      }
     }
   }
 
@@ -219,6 +257,7 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
     if (dead) return;
     info.polls += 1;
     info.lastPollAt = now();
+    info.nextPollAt = null; // a poll is in flight — the countdown restarts on schedule()
     ctrl = new AbortController();
     try {
       const res = await fetchFn(`${SLEEPER_API}/draft/${encodeURIComponent(draftId)}/picks`, {
@@ -252,10 +291,32 @@ export function createSleeperSync(store: Store, board: Board, opts: SleeperSyncO
   function schedule(): void {
     if (dead) return;
     const wait = Math.round(delay * (0.85 + 0.3 * random())); // ±15% jitter
+    info.nextPollAt = now() + wait;
     timer = setT(() => {
       timer = null;
       void poll();
     }, wait);
+  }
+
+  /** visibilitychange→visible: poll NOW — coming back to the tab must not
+      wait out the timer (or a 30s error backoff). Guards: never after
+      stop()/pause (dead), never while a poll is already in flight. */
+  function onVisibility(): void {
+    if (dead || ctrl !== null) return;
+    if (doc && doc.visibilityState !== undefined && doc.visibilityState !== 'visible') return;
+    if (timer !== null) {
+      clearT(timer);
+      timer = null;
+    }
+    void poll();
+  }
+
+  if (doc) {
+    try {
+      doc.addEventListener('visibilitychange', onVisibility);
+    } catch {
+      /* an exotic doc host must never break the loop — fast-poll is a bonus */
+    }
   }
 
   void poll(); // first poll immediately
@@ -312,7 +373,7 @@ export interface SyncManager {
     store: Store,
     board: Board,
     draftId: string,
-    opts?: { onUnresolvable?: 'pause' | 'skip' },
+    opts?: { onUnresolvable?: 'pause' | 'skip'; intervalMs?: number },
   ): void;
   stop(): void;
   getInfo(): ManagedSyncInfo;
@@ -325,6 +386,7 @@ function createManager(): SyncManager {
   let last: SyncInfo = {
     status: 'stopped',
     lastPollAt: null,
+    nextPollAt: null,
     pickCount: 0,
     backoffMs: POLL_MS,
     polls: 0,
@@ -350,7 +412,12 @@ function createManager(): SyncManager {
   }
 
   return {
-    start(store: Store, board: Board, id: string, opts?: { onUnresolvable?: 'pause' | 'skip' }): void {
+    start(
+      store: Store,
+      board: Board,
+      id: string,
+      opts?: { onUnresolvable?: 'pause' | 'skip'; intervalMs?: number },
+    ): void {
       if (inst) {
         inst.stop();
         inst = null;
@@ -363,6 +430,7 @@ function createManager(): SyncManager {
       inst = createSleeperSync(store, board, {
         draftId,
         onUnresolvable: opts?.onUnresolvable,
+        intervalMs: opts?.intervalMs,
         onStatus: (i) => {
           last = i;
           notify();

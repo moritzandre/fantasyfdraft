@@ -61,7 +61,7 @@ const TOOLS: Array<[string, string, string, string]> = [
   ['#/league', 'League', 'all 12 rosters · live draft grid', 'lv-tool-league'],
   ['#/log', 'Pick Log', 'review · edit · catch-up', 'lv-tool-draft'],
   ['#/sync', 'Sleeper Sync', 'live draft + mock lobbies', 'lv-tool-sync'],
-  ['#/planb', 'Plan B', 'the printed board, on screen', 'lv-tool-draft'],
+  ['#/planb', 'Plan B', 'tiers & strategy lists, live-struck', 'lv-tool-draft'],
 ];
 
 export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Props) {

@@ -137,8 +137,8 @@
   transition: transform var(--hold-ms, 3000ms) linear;
 }
 
-/* ── Plan B: the printed sheet on-screen, drafted players struck ───────── */
-.lv-planb .bb-row.lv-struck { text-decoration: line-through; opacity: 0.45; }
+/* ── Plan B: sheet-like reference rows, drafted players struck ─────────── */
+.lv-planb .lv-struck { text-decoration: line-through; opacity: 0.45; }
 
 /* ── Persistent bottom nav (NavBar.tsx): pad screens above the fixed bar ── */
 .lv-app-navpad { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
@@ -219,6 +219,19 @@
 @keyframes lv-cursor-pulse {
   0%, 100% { outline-color: var(--clock-up); }
   50% { outline-color: transparent; }
+}
+
+/* League team card that received a pick since the last render — brief
+   highlight while LeagueScreen's flash state holds the class (~1.6s). Base
+   is a static outline (works under reduced motion); full motion adds a
+   background flash that decays over the animation. */
+.lv-just-picked {
+  outline: 2px solid color-mix(in oklab, var(--tool-league) 65%, transparent);
+  outline-offset: -1px;
+}
+@keyframes lv-pick-flash {
+  from { background-color: color-mix(in oklab, var(--tool-league) 22%, transparent); }
+  to   { background-color: transparent; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -387,6 +400,9 @@
 
   /* the cursor cell pulse (static outline when motion is reduced) */
   .lv-grid-cursor { animation: lv-cursor-pulse 1.6s ease-in-out infinite; }
+
+  /* league card pick flash (static outline when motion is reduced) */
+  .lv-just-picked { animation: lv-pick-flash 1.4s ease-out; }
 
   /* score decomposition + sweep progress animate their widths */
   .lv-bar > span { transition: width 300ms ease; }

@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { Board, DraftState, Store, UiState } from '../../state/store';
 import { selectors } from '../../state/store';
+import { useSyncInfo } from './SyncPanel';
 import { createMockDriver } from '../../state/mock';
 import { archiveMock } from '../../state/mockHistory';
 import { loadOpponents } from '../../state/opponents';
@@ -72,6 +73,21 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
   const total = s.league.teams * s.league.rounds;
   const done = s.pickCursor > total;
   const myTurn = !done && selectors.isMyPick(s);
+
+  // Sleeper sync (tracked mock lobby): the note shows sync freshness instead
+  // of the local room readout — a 1s tick keeps "Xs ago" moving.
+  const sync = useSyncInfo();
+  const syncLive = sync.status === 'live';
+  const [, setSyncTick] = useState(0);
+  useEffect(() => {
+    if (!syncLive) return;
+    const t = setInterval(() => setSyncTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [syncLive]);
+  const syncAge =
+    sync.lastPollAt === null
+      ? null
+      : Math.max(0, Math.round((Date.now() - sync.lastPollAt) / 1000));
 
   useEffect(() => {
     if (!running || !driver || done) return;
@@ -222,13 +238,15 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
       <span class="min-w-0 flex-1 truncate text-xs text-app-dim">
         {note && s.picks.length === 0
           ? note
-          : !driver
-            ? 'Loading room…'
-            : myTurn && !autoMe
-              ? 'YOUR PICK — use the shortlist'
-              : mockLabel
-                ? `Loaded: ${mockLabel}`
-                : room || 'neutral room'}
+          : syncLive
+            ? `${myTurn ? 'YOUR PICK (in Sleeper) · ' : ''}synced ${syncAge ?? '?'}s ago · pick ${Math.min(s.pickCursor, total)}`
+            : !driver
+              ? 'Loading room…'
+              : myTurn && !autoMe
+                ? 'YOUR PICK — use the shortlist'
+                : mockLabel
+                  ? `Loaded: ${mockLabel}`
+                  : room || 'neutral room'}
       </span>
       <button
         type="button"

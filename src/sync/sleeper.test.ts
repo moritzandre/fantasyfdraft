@@ -80,6 +80,24 @@ async function settle(n = 12): Promise<void> {
   for (let i = 0; i < n; i += 1) await tick();
 }
 
+/** Fake document for the visibilitychange fast-poll — injectable doc host. */
+function makeDoc(state = 'visible') {
+  const listeners = new Set<() => void>();
+  return {
+    visibilityState: state,
+    addEventListener(type: string, fn: () => void): void {
+      if (type === 'visibilitychange') listeners.add(fn);
+    },
+    removeEventListener(type: string, fn: () => void): void {
+      listeners.delete(fn);
+    },
+    fire(): void {
+      for (const fn of Array.from(listeners)) fn();
+    },
+    listenerCount: () => listeners.size,
+  };
+}
+
 function baseOpts(timers: ReturnType<typeof makeTimers>, statuses?: SyncInfo[]) {
   return {
     draftId: 'd1',
@@ -342,6 +360,108 @@ test('stop() aborts the in-flight fetch and schedules nothing more', async () =>
   // the rejected fetch after stop() must never flip the status to 'error'
   assert.ok(statuses.every((st) => st.status !== 'error'));
   assert.equal(store.getState().picks.length, 0);
+});
+
+test('visibilitychange→visible fires exactly one immediate poll when live', async () => {
+  const timers = makeTimers();
+  const doc = makeDoc('visible');
+  const { fn, calls } = fetchMock(() => resOk([]));
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, { ...baseOpts(timers), fetchFn: fn, doc });
+  await settle();
+  assert.equal(calls.length, 1); // the boot poll
+  assert.equal(timers.size(), 1); // healthy loop, next poll pending
+
+  // Two rapid visibility events: the first cancels the timer and polls NOW;
+  // the second sees the in-flight poll and does nothing — exactly one extra.
+  doc.fire();
+  doc.fire();
+  await settle();
+  assert.equal(calls.length, 2);
+  assert.equal(timers.size(), 1); // rescheduled after the immediate poll
+  assert.equal(sync.info().status, 'live');
+  sync.stop();
+});
+
+test('visibility poll never fires when stopped, hidden, or paused; stop detaches the listener', async () => {
+  // stopped: the listener is removed by halt(), so firing does nothing
+  const timers = makeTimers();
+  const doc = makeDoc('visible');
+  const { fn, calls } = fetchMock(() => resOk([]));
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, { ...baseOpts(timers), fetchFn: fn, doc });
+  await settle();
+  assert.equal(doc.listenerCount(), 1);
+  sync.stop();
+  assert.equal(doc.listenerCount(), 0); // halt() detached it
+  doc.fire();
+  await settle();
+  assert.equal(calls.length, 1); // no poll after stop
+
+  // hidden: visible-guard blocks the fast poll, the timer stays pending
+  const timers2 = makeTimers();
+  const doc2 = makeDoc('hidden');
+  const m2 = fetchMock(() => resOk([]));
+  const sync2 = createSleeperSync(makeStore(), board, {
+    ...baseOpts(timers2),
+    fetchFn: m2.fn,
+    doc: doc2,
+  });
+  await settle();
+  assert.equal(m2.calls.length, 1);
+  doc2.fire();
+  await settle();
+  assert.equal(m2.calls.length, 1); // hidden — no immediate poll
+  assert.equal(timers2.size(), 1); // scheduled poll untouched
+  sync2.stop();
+
+  // paused on an unresolvable id: dead — the listener is gone, no fast poll
+  const timers3 = makeTimers();
+  const doc3 = makeDoc('visible');
+  const m3 = fetchMock(() => resOk([{ pick_no: 1, player_id: '999' }]));
+  const sync3 = createSleeperSync(makeStore(), board, {
+    ...baseOpts(timers3),
+    fetchFn: m3.fn,
+    doc: doc3,
+  });
+  await settle();
+  assert.equal(sync3.info().paused, true);
+  assert.equal(doc3.listenerCount(), 0);
+  doc3.fire();
+  await settle();
+  assert.equal(m3.calls.length, 1);
+  sync3.stop();
+});
+
+test('nextPollAt is set after each schedule and cleared on stop', async () => {
+  const timers = makeTimers();
+  const { fn } = fetchMock(() => resOk([]));
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, { ...baseOpts(timers), fetchFn: fn });
+  await settle();
+
+  // now()=1_000_000 fixed, random()=0.5 → jitter factor exactly 1.0
+  assert.equal(sync.info().nextPollAt, 1_000_000 + POLL_MS);
+  assert.equal(sync.info().backoffMs, POLL_MS);
+
+  timers.runNext();
+  await settle();
+  assert.equal(sync.info().nextPollAt, 1_000_000 + POLL_MS); // fixed clock — rescheduled
+
+  sync.stop();
+  assert.equal(sync.info().nextPollAt, null); // stopped — no countdown to show
+});
+
+test('nextPollAt tracks the backoff delay on errors', async () => {
+  const timers = makeTimers();
+  const { fn } = fetchMock(() => resErr(429));
+  const store = makeStore();
+  const sync = createSleeperSync(store, board, { ...baseOpts(timers), fetchFn: fn });
+  await settle();
+
+  assert.equal(sync.info().backoffMs, 6000);
+  assert.equal(sync.info().nextPollAt, 1_000_000 + 6000); // countdown = backoff
+  sync.stop();
 });
 
 test('pickActiveDraft prefers drafting > paused > pre_draft > complete, newest wins ties', () => {

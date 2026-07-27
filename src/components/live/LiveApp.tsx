@@ -24,6 +24,8 @@ import {
 import type { ProfilesState } from '../../state/profiles';
 import { getMode, setMode } from '../../state/mode';
 import type { AppMode } from '../../state/mode';
+import { maybeResumeSync } from '../../state/syncResume';
+import { syncManager } from '../../sync/sleeper';
 import { loadStrategies, safeStrategyName } from '../../state/strategies';
 import { acceptUpdate, isUpdatePending } from '../../pwa';
 import '../../styles/live.css';
@@ -227,7 +229,7 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
       {route === '#/review' && <ReviewScreen s={s} store={store} board={board} mode={mode} />}
       {route === '#/log' && <PickLog s={s} store={store} board={board} />}
       {route === '#/sync' && <SyncPanel s={s} store={store} board={board} mode={mode} />}
-      {route === '#/planb' && <PlanBSheet s={s} store={store} board={board} />}
+      {route === '#/planb' && <PlanBSheet s={s} rawBoard={rawBoard} />}
       {route === '#/guide' && <GuideScreen />}
       {route === '#/sim' && <SimLab s={s} store={store} board={board} />}
       {route === '#/more' && <MoreScreen />}
@@ -286,7 +288,11 @@ export default function LiveApp() {
   // one microtask after the board; localStorage restore still wins by max-rev.
   // Re-runs whenever the (profile, mode) context changes: each context boots
   // its OWN store against its own keys; the old store is dropped first so a
-  // stray dispatch can never land in the wrong context.
+  // stray dispatch can never land in the wrong context. That same rule stops
+  // Sleeper sync at both edges: the cleanup kills any loop pointed at the
+  // outgoing store (a store from another context must NEVER receive synced
+  // picks), and the new store auto-resumes its own sync when its persisted ui
+  // says one was running (syncResume.ts — sync survives reloads).
   const [store, setStore] = useState<Store | null>(null);
   useEffect(() => {
     if (!applied) return;
@@ -298,11 +304,14 @@ export default function LiveApp() {
     } as LeagueConfig;
     bootPersistedStore({ board: applied, league }, undefined, ctx)
       .then((st) => {
-        if (!cancelled) setStore(st);
+        if (cancelled) return;
+        setStore(st);
+        maybeResumeSync(st, applied, mode);
       })
       .catch((e) => setFatal(String((e as any)?.message ?? e)));
     return () => {
       cancelled = true;
+      syncManager.stop();
     };
   }, [applied, ctx]);
 

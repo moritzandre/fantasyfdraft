@@ -8,7 +8,9 @@
 // derivation, memoized on [s.rev], never persisted. Below the live review:
 // the mock-draft HISTORY (dp:mock-history:v1, global — archived from
 // practice, reviewable in any mode); a tapped row re-grades its stored
-// picks under the RECORD's league shape, delete is a 3s HoldButton.
+// picks under the RECORD's league shape, delete is a 3s HoldButton (and, in
+// practice mode, deleting the record currently loaded in the store also
+// RESET_DRAFTs + clears seed/label — a dead mock's picks never linger).
 // PRACTICE mode only (mode prop, default 'real' — IMPORT/RESET must never
 // land in the real context): Resume loads a record back into the practice
 // store via IMPORT_STATE and continues it at #/live; Replay room keeps only
@@ -68,6 +70,12 @@ function GradedList({ graded }: { graded: GradedPick[] }) {
 function fmtWhen(ts: number): string {
   const d = new Date(ts);
   return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+/** The ui.mockLabel a Resume of this record writes — ONE builder, so the
+    delete flow's "is this record currently loaded?" match can never drift. */
+function recordLabel(r: MockRecord): string {
+  return `${fmtWhen(r.finishedAt)} · ${r.league.teams}-team slot ${r.league.slot}`;
 }
 
 export default function ReviewScreen({
@@ -132,7 +140,7 @@ export default function ReviewScreen({
   const resumeMock = (r: MockRecord) => {
     const cur = store.getState();
     const maxN = r.picks.reduce((m, p) => Math.max(m, p.n), 0);
-    const label = `${fmtWhen(r.finishedAt)} · ${r.league.teams}-team slot ${r.league.slot}`;
+    const label = recordLabel(r);
     const state: PortableState = {
       schemaVersion: 1,
       buildHash: cur.buildHash, // reducer keeps the running board's hash anyway
@@ -271,6 +279,24 @@ export default function ReviewScreen({
                     ms={3000}
                     onHold={() => {
                       if (expandedId === r.id) setExpandedId(null);
+                      // If THIS record is what Resume/Replay loaded into the
+                      // practice store (seed or label match), wipe that too —
+                      // a deleted mock's picks must not linger as the live
+                      // draft. PRACTICE only: the guard keeps RESET_DRAFT out
+                      // of the real context, where s.picks are the real draft.
+                      if (practice) {
+                        const ui = s.ui as Record<string, unknown>;
+                        const loaded =
+                          (typeof r.seed === 'number' && ui.mockSeed === r.seed) ||
+                          (typeof ui.mockLabel === 'string' && ui.mockLabel === recordLabel(r));
+                        if (loaded) {
+                          store.dispatch({ type: 'RESET_DRAFT' });
+                          store.dispatch({
+                            type: 'SET_UI',
+                            ui: { mockSeed: undefined, mockLabel: undefined } as unknown as Partial<UiState>,
+                          });
+                        }
+                      }
                       setHistory(deleteMock(r.id));
                     }}
                     class="h-14 shrink-0 rounded-lg border border-app-border px-3 text-xs font-bold text-app-dim"

@@ -8,13 +8,17 @@
 // derived from the pick log, memoized on [s.rev], never persisted; intent is
 // pure decoration — any failure renders nothing. Display-only: recording
 // picks stays a one-tap action on #/live.
+// Live feel: a "latest picks" ticker strip (last 5, newest first, position-
+// tinted) sits above both modes, and a team card flashes briefly when that
+// seat's pick count increases (prev counts in a ref — sync/sim/manual all
+// read the same way because it's derived from s.picks, not the source).
 
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Board, DraftState, Store } from '../../state/store';
 import { selectors } from '../../state/store';
 import { fillSlots } from './RosterRail';
 import { leagueNeeds } from '../../../engine/insights.js';
-import { nextMyPick, roundForPick } from '../../../engine/picks.js';
+import { nextMyPick, roundForPick, slotForPick } from '../../../engine/picks.js';
 import { abbrevName } from '../../../shared/format.js';
 import { loadOpponents, seatName } from '../../state/opponents';
 import type { OpponentsFile } from '../../state/opponents';
@@ -88,6 +92,47 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
   );
   const onClock = selectors.onClockSlot(s);
 
+  // ── Latest-picks ticker: last 5 recorded picks, newest first ────────────
+  const latest = useMemo(
+    () =>
+      [...s.picks]
+        .sort((a, b) => b.n - a.n)
+        .slice(0, 5)
+        .map((p) => ({
+          n: p.n,
+          round: roundForPick(p.n, s.league.teams),
+          slot: slotForPick(p.n, s.league.teams, s.league.snake),
+          player: board.players[p.idx] ?? null,
+        })),
+    [s.rev],
+  );
+
+  // ── Flash the cards of seats that picked since the last render ──────────
+  // Prev pick-count per slot in a ref; any increase flags that slot for a
+  // brief highlight (cleared on a timer). Derived from s.picks, so synced,
+  // simmed and manual picks all flash the same way. UNDO only decreases —
+  // never flashes.
+  const prevCounts = useRef<Map<number, number> | null>(null);
+  const [flashSlots, setFlashSlots] = useState<Set<number>>(() => new Set());
+  useEffect(() => {
+    const counts = new Map<number, number>();
+    for (const p of s.picks) {
+      const slot = slotForPick(p.n, s.league.teams, s.league.snake);
+      counts.set(slot, (counts.get(slot) ?? 0) + 1);
+    }
+    const prev = prevCounts.current;
+    prevCounts.current = counts;
+    if (!prev) return;
+    const grew = new Set<number>();
+    counts.forEach((c, slot) => {
+      if (c > (prev.get(slot) ?? 0)) grew.add(slot);
+    });
+    if (grew.size === 0) return;
+    setFlashSlots(grew);
+    const t = setTimeout(() => setFlashSlots(new Set()), 1600);
+    return () => clearTimeout(t);
+  }, [s.rev]);
+
   return (
     <main class="lv-tool-league mx-auto max-w-6xl px-3 pb-16">
       <div class="sticky top-0 z-10 flex items-center gap-2 bg-app-bg py-2">
@@ -111,6 +156,39 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
         ))}
       </div>
 
+      {latest.length > 0 && (
+        <div
+          class="flex items-center gap-1.5 overflow-x-auto py-1.5"
+          aria-label="Latest picks, newest first"
+        >
+          <span class="shrink-0 text-[11px] font-bold tracking-widest text-app-dim">LATEST</span>
+          {latest.map((t, i) => (
+            <span
+              class={`flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2 text-xs ${
+                i === 0 ? 'border-accent/60 bg-app-surface' : 'border-app-border bg-app-surface/60'
+              }`}
+            >
+              <span class="num text-app-dim">T{t.slot}</span>
+              {t.player ? (
+                <>
+                  <span
+                    class={`lv-post lv-post-${String(t.player.pos ?? '').toLowerCase()} num rounded px-1 font-bold`}
+                  >
+                    {t.player.pos}
+                  </span>
+                  <span class={`max-w-32 truncate font-semibold lv-pos-${String(t.player.pos ?? '').toLowerCase()}`}>
+                    {abbrevName(t.player.name, 16)}
+                  </span>
+                </>
+              ) : (
+                <span class="text-app-dim">off-board</span>
+              )}
+              <span class="num text-app-dim">R{t.round}·{t.n}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
       {mode === 'grid' ? (
         <LiveDraftGrid s={s} board={board} opp={opp} />
       ) : (
@@ -131,7 +209,7 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
                     : t.slot === onClock
                       ? 'lv-bye-alert border-app-border bg-app-surface'
                       : 'border-app-border bg-app-surface/60'
-                }`}
+                }${flashSlots.has(t.slot) ? ' lv-just-picked' : ''}`}
               >
                 <header class="flex items-baseline justify-between pb-2">
                   <span class="min-w-0 font-bold">

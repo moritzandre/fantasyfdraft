@@ -69,12 +69,24 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
 
   // Sync dot — three states, never colour-only (label text + hatch pattern):
   // LIVE solid green · MANUAL grey · OFFLINE red-hatched. Tap opens SyncPanel.
+  // When live the label carries the poll age ("LIVE·2s") — a 1s re-render
+  // tick keeps it moving between status events, so sync visibly breathes.
   const sync = useSyncInfo();
+  const [, setSyncTick] = useState(0);
+  useEffect(() => {
+    if (sync.status !== 'live') return;
+    const t = setInterval(() => setSyncTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [sync.status]);
   let dotLabel = 'MANUAL';
   let dotClass = 'border-app-border bg-app-border';
   let dotStyle: Record<string, string> | undefined;
   if (sync.status === 'live') {
-    dotLabel = 'LIVE';
+    const age =
+      sync.lastPollAt === null
+        ? null
+        : Math.max(0, Math.round((Date.now() - sync.lastPollAt) / 1000));
+    dotLabel = age === null ? 'LIVE' : `LIVE·${age}s`;
     dotClass = 'border-emerald-600 bg-emerald-500';
   } else if (sync.status === 'error') {
     dotLabel = 'OFFLINE';
