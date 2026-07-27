@@ -200,7 +200,7 @@ export default function SyncPanel({
 
   return (
     <main class="mx-auto max-w-xl px-4 pb-16">
-      <div class="sticky top-0 z-10 flex items-center gap-2 bg-app-bg py-2">
+      <div class="lv-blurbar sticky top-0 z-10 flex items-center gap-2 py-2">
         <a
           href="#/live"
           class="flex h-14 min-w-14 items-center justify-center rounded-lg border border-app-border bg-app-surface px-3 font-bold"
@@ -277,7 +277,7 @@ export default function SyncPanel({
       {/* Sleeper MOCK drafts — practice mode only: discovery via username
           (mocks have no league_id, so the league lookup can never find them) */}
       {mode === 'practice' && (
-        <section class="lv-sect lv-tool-sync mt-4 rounded-xl border border-app-border bg-app-surface/50 p-3">
+        <section class="lv-tool-sync mt-4 rounded-xl border border-app-border bg-app-surface/50 p-3">
           <h2 class="lv-h-tool pb-1 text-xs font-bold tracking-widest">
             SLEEPER MOCK DRAFT (PRACTICE)
           </h2>

@@ -24,7 +24,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
   return (
     <section id={`guide-${id}`} class="lv-tool-guide scroll-mt-36 pt-5">
       <h2 class="lv-h-tool pb-2 text-xs font-bold tracking-widest">{title}</h2>
-      <div class="lv-sect flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface p-4 text-[15px] leading-relaxed">
+      <div class="flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface p-4 text-[15px] leading-relaxed">
         {children}
       </div>
     </section>
@@ -38,7 +38,7 @@ function Ul({ children }: { children: any }) {
 export default function GuideScreen() {
   return (
     <main class="mx-auto max-w-2xl px-4 pb-24">
-      <div class="sticky top-0 z-10 flex flex-col gap-2 bg-app-bg py-2">
+      <div class="lv-blurbar sticky top-0 z-10 flex flex-col gap-2 py-2">
         <div class="flex items-center gap-2">
           <a
             href="#/hub"

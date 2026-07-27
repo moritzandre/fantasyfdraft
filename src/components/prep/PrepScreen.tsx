@@ -68,7 +68,7 @@ export default function PrepScreen({ s, store, board }: { s: DraftState; store: 
 
   return (
     <div class="flex min-h-dvh flex-col">
-      <div class="sticky top-0 z-30 border-b border-app-border bg-app-surface">
+      <div class="lv-blurbar sticky top-0 z-30 border-b border-app-border">
         <div class="flex items-center gap-2 px-3 pt-2">
           <a
             href="#/ready"

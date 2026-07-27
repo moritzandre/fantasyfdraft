@@ -327,7 +327,13 @@ export default function LiveApp() {
     );
   }
   if (!board || !applied || !store) {
-    return <p class="px-6 py-16 text-center text-app-dim">Loading board…</p>;
+    return (
+      <div class="lv-skeleton mx-auto max-w-md px-6 py-16" role="status" aria-label="Loading board">
+        <div />
+        <div />
+        <div />
+      </div>
+    );
   }
   return (
     <StoreApp

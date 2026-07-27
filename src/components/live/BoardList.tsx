@@ -40,11 +40,11 @@ export default function BoardList({ s, store, board }: { s: DraftState; store: S
 
   return (
     <div class="flex h-full flex-col">
-      <div class="flex flex-wrap gap-1 p-2 pb-1">
+      <div class="lv-hscroll gap-1 p-2 pb-1">
         {CHIPS.map((c) => (
           <button
             type="button"
-            class={`num min-h-14 rounded-lg border px-3 text-[15px] font-semibold ${
+            class={`num min-h-14 shrink-0 rounded-lg border px-3 text-[15px] font-semibold ${
               s.ui.posFilter === c
                 ? c === 'ALL' || c === 'TARGETS'
                   ? 'border-accent bg-accent text-app-bg'

@@ -567,7 +567,7 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
       </div>
 
       {/* ── A. Strategy sweep ─────────────────────────────────────────── */}
-      <section class="lv-sect lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+      <section class="lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
         <h2 class="lv-h-tool text-[17px] font-bold">Strategy sweep — browser self-play</h2>
         <p class="pt-1 text-sm text-app-dim">
           The live engine drafts every selected strategy from slot {slot} against the shared
@@ -659,7 +659,7 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
       </section>
 
       {/* ── R. Room editor ────────────────────────────────────────────── */}
-      <section class="lv-sect lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+      <section class="lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
         <h2 class="lv-h-tool text-[17px] font-bold">
           Room — who you practice against
           {roomLocal && <span class="pl-2 text-xs font-bold text-accent">LOCAL EDITS ACTIVE</span>}
@@ -792,7 +792,7 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
       </section>
 
       {/* ── B. Mock calibration ───────────────────────────────────────── */}
-      <section class="lv-sect lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+      <section class="lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
         <h2 class="lv-h-tool text-[17px] font-bold">Mock calibration — fit the room to YOUR Sleeper mocks</h2>
         <p class="pt-1 text-sm text-app-dim">
           Fetches your completed {l.teams}-team Sleeper mock drafts, replays every observed pick

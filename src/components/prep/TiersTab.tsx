@@ -98,7 +98,7 @@ export default function TiersTab({ ctx }: { ctx: PrepCtx }) {
 
   return (
     <div class="mx-auto max-w-3xl px-3 pb-16">
-      <div class="sticky top-0 z-10 flex gap-1 bg-app-bg py-2">
+      <div class="lv-blurbar sticky top-0 z-10 flex gap-1 py-2">
         {POSITIONS.map((x) => (
           <button
             type="button"

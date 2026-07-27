@@ -57,7 +57,7 @@ export default function PickLog({ s, store, board }: { s: DraftState; store: Sto
 
   return (
     <main class="mx-auto max-w-2xl px-3 pb-24">
-      <div class="sticky top-0 z-10 flex items-center gap-2 bg-app-bg py-2">
+      <div class="lv-blurbar sticky top-0 z-10 flex items-center gap-2 py-2">
         <a
           href="#/live"
           class="flex h-14 min-w-14 items-center justify-center rounded-lg border border-app-border bg-app-surface px-3 font-bold"

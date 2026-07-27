@@ -189,7 +189,8 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
   };
 
   return (
-    <div class="lv-mock-controls flex items-center gap-2 overflow-x-auto px-2">
+    <div class="lv-mock-controls">
+      <div class="lv-hscroll h-full items-center gap-2 px-3">
       <span class="lv-clock-near shrink-0 rounded px-2 py-1 text-xs font-bold">MOCK</span>
       <button
         type="button"
@@ -274,6 +275,7 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
           Review →
         </a>
       )}
+      </div>
     </div>
   );
 }

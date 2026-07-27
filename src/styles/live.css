@@ -2,8 +2,9 @@
    live.css — screen-only styles for the Live island that Tailwind utilities
    can't express: container queries, content-visibility row containment, the
    hold-to-confirm fill, tier/position encodings driven by tokens.css, and the
-   on-the-clock banner channels. Imported ONLY by LiveApp.tsx — never by the
-   print pages. All encoding values come from tokens.css custom properties.
+   on-the-clock banner channels. Imported by the LiveApp and SeasonApp
+   islands — never by the print pages. All encoding values come from
+   tokens.css custom properties.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── App root ──────────────────────────────────────────────────────────── */
@@ -20,6 +21,44 @@
   -webkit-user-select: text;
 }
 
+/* ── Scrollbars: thin, rounded, track-less — the OS default reads wrong on
+   the dark chrome. Two paths, same look: modern engines honor the standard
+   scrollbar-width/-color pair; WebKit takes the ::-webkit-* pseudos, where
+   a 2px transparent inset makes the thumb read slim and "widen" on hover
+   without shifting layout. iPad overlay scrollbars are unaffected. ─────── */
+:root {
+  scrollbar-color: color-mix(in oklab, var(--app-border) 55%, var(--app-text-dim)) transparent;
+}
+* { scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  background-color: color-mix(in oklab, var(--app-border) 55%, var(--app-text-dim));
+}
+*::-webkit-scrollbar-thumb:hover {
+  border-width: 1px;
+  background-color: color-mix(in oklab, var(--app-border) 25%, var(--app-text-dim));
+}
+
+/* ── Horizontal chip/strip rows: no scrollbar — scrollability reads from
+   the edge fade masks instead; children are gentle snap points. Callers
+   keep ≥8px inline padding so the 12px fade never eats the first chip. ── */
+.lv-hscroll {
+  display: flex;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+.lv-hscroll::-webkit-scrollbar { display: none; }
+.lv-hscroll > * { scroll-snap-align: start; }
+
 /* ── Top bar: 72px sticky, safe-area aware ─────────────────────────────── */
 .lv-topbar {
   position: sticky;
@@ -27,8 +66,26 @@
   z-index: 40;
   height: calc(72px + env(safe-area-inset-top));
   padding-top: env(safe-area-inset-top);
-  background: var(--app-surface);
   border-bottom: 1px solid var(--app-border);
+}
+
+/* Sticky/fixed bars: translucent + blurred so content scrolls "under" them.
+   .lv-blurbar is the component-side hook (NavBar, screen sticky headers);
+   the topbar and narrow tabs get it here. Solid surface when blur is
+   unsupported — never a see-through bar without the frost. */
+.lv-topbar,
+.lv-tabs,
+.lv-blurbar {
+  background: color-mix(in srgb, var(--app-surface) 82%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+@supports not ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+  .lv-topbar,
+  .lv-tabs,
+  .lv-blurbar {
+    background: var(--app-surface);
+  }
 }
 
 /* On-the-clock banner — three redundant channels (color + text + weight) */
@@ -70,7 +127,6 @@
     z-index: 40;
     height: calc(64px + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    background: var(--app-surface);
     border-top: 1px solid var(--app-border);
   }
 }
@@ -84,14 +140,14 @@
 
 /* Tier: 4px left border, luminance from the tokens.css ramp (channel 1),
    plus the letter chip (channel 2) — grayscale-safe by construction.
-   In-app only, the band also washes in from the left edge (background-IMAGE
-   longhand so Tailwind bg-color utilities on the same element still win). */
-.lv-tier-a { border-left: 4px solid var(--tier-a-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-a-bg) 10%, transparent), transparent 60%); }
-.lv-tier-b { border-left: 4px solid var(--tier-b-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-b-bg) 10%, transparent), transparent 60%); }
-.lv-tier-c { border-left: 4px solid var(--tier-c-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-c-bg) 10%, transparent), transparent 60%); }
-.lv-tier-d { border-left: 4px solid var(--tier-d-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-d-bg) 10%, transparent), transparent 60%); }
-.lv-tier-e { border-left: 4px solid var(--tier-e-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-e-bg) 10%, transparent), transparent 60%); }
-.lv-tier-f { border-left: 4px solid var(--tier-f-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-f-bg) 10%, transparent), transparent 60%); }
+   RESTRAINT: the edge is the row's ONLY tier accent — the old full-row
+   left wash is retired (edge + wash + chip stacked was too many layers). */
+.lv-tier-a { border-left: 4px solid var(--tier-a-bg); }
+.lv-tier-b { border-left: 4px solid var(--tier-b-bg); }
+.lv-tier-c { border-left: 4px solid var(--tier-c-bg); }
+.lv-tier-d { border-left: 4px solid var(--tier-d-bg); }
+.lv-tier-e { border-left: 4px solid var(--tier-e-bg); }
+.lv-tier-f { border-left: 4px solid var(--tier-f-bg); }
 
 .lv-chip-a { background: var(--tier-a-bg); color: var(--tier-a-fg); }
 .lv-chip-b { background: var(--tier-b-bg); color: var(--tier-b-fg); }
@@ -211,7 +267,7 @@
 }
 
 /* ── League view: live draft grid ─────────────────────────────────────── */
-.lv-grid-me { background: color-mix(in oklab, var(--app-accent) 12%, transparent); }
+.lv-grid-me { background: color-mix(in oklab, var(--app-accent) 9%, transparent); }
 .lv-grid-cursor {
   outline: 2px solid var(--clock-up);
   outline-offset: -2px;
@@ -243,6 +299,17 @@
      3. POSITION set  — stronger in-app versions of the tokens.css pos hues
    Contrast contract: --posc-fg on any solid chip ≥ 6.7:1; any tool/tint text
    on bg/surface ≥ 6.8:1. Color is NEVER the only channel — labels stay.
+
+   RESTRAINT RULES (the streamline contract — new code must keep these):
+   • ONE accent hierarchy per element. A row/card carries EITHER a tier
+     left edge OR a hue wash OR a chip stack — never edge + wash + chip on
+     the same box. Rows (BoardList, Plan B) and rec cards: tier LEFT EDGE
+     + letter chip only; position identity lives ONLY in the pos chip.
+   • Washes stay ≤ 8–10% alpha; solid chips stay solid. The LiveDraftGrid
+     cell washes are the one deliberate wash surface (the streaks ARE the
+     point) and still sit under 10%.
+   • Tool hues live on nav, headers and the Hub/More tool cards ONLY.
+     Generic content sections carry no colored edges (.lv-sect retired).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -296,8 +363,8 @@
   }
 }
 
-/* Section card with a tool-colored left edge (SimLab, Guide, Sync) */
-.lv-sect { border-left: 3px solid var(--tool-c, var(--app-border)); }
+/* .lv-sect (tool-colored edge on generic sections) is RETIRED — restraint
+   rule 3: only .lv-toolcard carries a tool edge now. */
 
 /* Nav items (bottom bars): active = tool-colored text + top indicator bar */
 .lv-navitem { position: relative; }
@@ -323,6 +390,14 @@
 /* ── Semantic text + tag chips (always beside a text label) ───────────── */
 .lv-good { color: var(--sem-ok-text); }
 .lv-warn-t { color: var(--sem-warn-text); }
+
+/* Sync-status dots (TopBar, SeasonApp) — semantic tokens, never raw hues.
+   OK is solid; BAD keeps the hatch so offline is never color-only. */
+.lv-dot-ok  { border-color: var(--sem-ok); background-color: var(--sem-ok); }
+.lv-dot-bad {
+  border-color: var(--sem-bad);
+  background-image: repeating-linear-gradient(45deg, var(--sem-bad) 0 2px, transparent 2px 4px);
+}
 .lv-tag-ok   { background: color-mix(in oklab, var(--sem-ok) 18%, transparent);   color: var(--sem-ok-text); }
 .lv-tag-warn { background: color-mix(in oklab, var(--sem-warn) 18%, transparent); color: var(--sem-warn-text); }
 .lv-tag-bad  { background: color-mix(in oklab, var(--sem-bad) 18%, transparent);  color: var(--sem-bad-text); }
@@ -340,18 +415,19 @@
 .lv-posc-flex { background-color: var(--posc-flex); }
 
 /* Position chips — TINT: dim wash + hue-tinted text (LeagueScreen roster
-   lines, season rows, empty roster slots). Text ≥7:1 on surface. */
+   lines, season rows, empty roster slots). Text ≥7:1 on surface.
+   Washes capped at 10% (restraint rule 2). */
 .lv-post {
-  background-color: color-mix(in oklab, var(--app-text-dim) 12%, transparent);
+  background-color: color-mix(in oklab, var(--app-text-dim) 10%, transparent);
   color: var(--app-text-dim);
 }
-.lv-post-qb  { background-color: color-mix(in oklab, var(--posc-qb) 16%, transparent);  color: color-mix(in oklab, var(--posc-qb) 65%, var(--app-text)); }
-.lv-post-rb  { background-color: color-mix(in oklab, var(--posc-rb) 16%, transparent);  color: color-mix(in oklab, var(--posc-rb) 65%, var(--app-text)); }
-.lv-post-wr  { background-color: color-mix(in oklab, var(--posc-wr) 16%, transparent);  color: color-mix(in oklab, var(--posc-wr) 65%, var(--app-text)); }
-.lv-post-te  { background-color: color-mix(in oklab, var(--posc-te) 16%, transparent);  color: color-mix(in oklab, var(--posc-te) 65%, var(--app-text)); }
-.lv-post-k   { background-color: color-mix(in oklab, var(--posc-k) 16%, transparent);   color: color-mix(in oklab, var(--posc-k) 65%, var(--app-text)); }
-.lv-post-dst { background-color: color-mix(in oklab, var(--posc-dst) 16%, transparent); color: color-mix(in oklab, var(--posc-dst) 65%, var(--app-text)); }
-.lv-post-flex { background-color: color-mix(in oklab, var(--posc-flex) 14%, transparent); color: color-mix(in oklab, var(--posc-flex) 65%, var(--app-text)); }
+.lv-post-qb  { background-color: color-mix(in oklab, var(--posc-qb) 10%, transparent);  color: color-mix(in oklab, var(--posc-qb) 65%, var(--app-text)); }
+.lv-post-rb  { background-color: color-mix(in oklab, var(--posc-rb) 10%, transparent);  color: color-mix(in oklab, var(--posc-rb) 65%, var(--app-text)); }
+.lv-post-wr  { background-color: color-mix(in oklab, var(--posc-wr) 10%, transparent);  color: color-mix(in oklab, var(--posc-wr) 65%, var(--app-text)); }
+.lv-post-te  { background-color: color-mix(in oklab, var(--posc-te) 10%, transparent);  color: color-mix(in oklab, var(--posc-te) 65%, var(--app-text)); }
+.lv-post-k   { background-color: color-mix(in oklab, var(--posc-k) 10%, transparent);   color: color-mix(in oklab, var(--posc-k) 65%, var(--app-text)); }
+.lv-post-dst { background-color: color-mix(in oklab, var(--posc-dst) 10%, transparent); color: color-mix(in oklab, var(--posc-dst) 65%, var(--app-text)); }
+.lv-post-flex { background-color: color-mix(in oklab, var(--posc-flex) 10%, transparent); color: color-mix(in oklab, var(--posc-flex) 65%, var(--app-text)); }
 
 /* Empty roster slot boxes: dim wash of the position they're waiting for */
 .lv-slot-qb  { background-color: color-mix(in oklab, var(--posc-qb) 7%, transparent);  border-color: color-mix(in oklab, var(--posc-qb) 30%, var(--app-border)); }
@@ -365,22 +441,47 @@
 /* LiveDraftGrid cells: subtle position wash so runs read as color streaks.
    Declared AFTER .lv-grid-me so a filled cell in my column keeps its streak
    color (my column stays identified by header + cursor + empty-cell tint). */
-.lv-cell-qb  { background-color: color-mix(in oklab, var(--posc-qb) 13%, transparent); }
-.lv-cell-rb  { background-color: color-mix(in oklab, var(--posc-rb) 13%, transparent); }
-.lv-cell-wr  { background-color: color-mix(in oklab, var(--posc-wr) 13%, transparent); }
-.lv-cell-te  { background-color: color-mix(in oklab, var(--posc-te) 13%, transparent); }
-.lv-cell-k   { background-color: color-mix(in oklab, var(--posc-k) 10%, transparent); }
-.lv-cell-dst { background-color: color-mix(in oklab, var(--posc-dst) 10%, transparent); }
+.lv-cell-qb  { background-color: color-mix(in oklab, var(--posc-qb) 9%, transparent); }
+.lv-cell-rb  { background-color: color-mix(in oklab, var(--posc-rb) 9%, transparent); }
+.lv-cell-wr  { background-color: color-mix(in oklab, var(--posc-wr) 9%, transparent); }
+.lv-cell-te  { background-color: color-mix(in oklab, var(--posc-te) 9%, transparent); }
+.lv-cell-k   { background-color: color-mix(in oklab, var(--posc-k) 7%, transparent); }
+.lv-cell-dst { background-color: color-mix(in oklab, var(--posc-dst) 7%, transparent); }
 
-/* ── SimLab progress bar (fill color = ambient tool hue) ───────────────── */
-.lv-progress { height: 12px; overflow: hidden; border-radius: 6px; background: var(--app-bg); }
-.lv-progress-fill { height: 100%; background: var(--tool-c, var(--app-accent)); }
+/* ── SimLab progress bar (fill = ambient tool hue, subtle gradient + a
+   soft glow so a running sweep reads alive even between width updates) ─── */
+.lv-progress { height: 12px; border-radius: 6px; background: var(--app-bg); }
+.lv-progress-fill {
+  height: 100%;
+  border-radius: 6px;
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--tool-c, var(--app-accent)) 70%, var(--app-bg)),
+    var(--tool-c, var(--app-accent))
+  );
+  box-shadow: 0 0 10px color-mix(in oklab, var(--tool-c, var(--app-accent)) 40%, transparent);
+}
+
+/* ── Skeleton loading: three shimmering bars (static grey under reduced
+   motion — the shimmer lives in the motion block below) ────────────────── */
+.lv-skeleton { display: flex; flex-direction: column; gap: 12px; }
+.lv-skeleton > div {
+  height: 16px;
+  border-radius: 8px;
+  background-color: color-mix(in oklab, var(--app-text-dim) 14%, transparent);
+}
+.lv-skeleton > div:nth-child(2) { width: 78%; }
+.lv-skeleton > div:nth-child(3) { width: 56%; }
 
 /* ── Motion: micro-interactions, entrance fade, pulses. ALL gated on
    prefers-reduced-motion — with it off, everything is instant + static. ── */
 @keyframes lv-enter {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+@keyframes lv-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 @media (prefers-reduced-motion: no-preference) {
   /* shared press + state transitions on every tappable */
@@ -407,4 +508,16 @@
   /* score decomposition + sweep progress animate their widths */
   .lv-bar > span { transition: width 300ms ease; }
   .lv-progress-fill { transition: width 350ms ease; }
+
+  /* skeleton bars shimmer (static grey otherwise) */
+  .lv-skeleton > div {
+    background-image: linear-gradient(
+      90deg,
+      transparent 35%,
+      color-mix(in oklab, var(--app-text) 8%, transparent) 50%,
+      transparent 65%
+    );
+    background-size: 250% 100%;
+    animation: lv-shimmer 1.6s linear infinite;
+  }
 }

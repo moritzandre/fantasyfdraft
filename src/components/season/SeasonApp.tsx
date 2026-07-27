@@ -67,19 +67,15 @@ function SyncDot() {
   const info = useLeagueSyncInfo();
   let label = 'IDLE';
   let cls = 'border-app-border bg-app-border';
-  let style: Record<string, string> | undefined;
   if (info.status === 'live') {
     label = 'LIVE';
-    cls = 'border-emerald-600 bg-emerald-500';
+    cls = 'lv-dot-ok';
   } else if (info.status === 'syncing') {
     label = 'SYNC';
     cls = 'lv-clock-near border-transparent';
   } else if (info.status === 'error') {
     label = 'ERROR';
-    cls = 'border-red-600';
-    style = {
-      backgroundImage: 'repeating-linear-gradient(45deg,#dc2626 0 2px,transparent 2px 4px)',
-    };
+    cls = 'lv-dot-bad';
   }
   return (
     <button
@@ -91,7 +87,7 @@ function SyncDot() {
       title="League sync — tap to configure"
       aria-label={`League sync: ${label}`}
     >
-      <span class={`h-3 w-3 rounded-full border ${cls}`} style={style} />
+      <span class={`h-3 w-3 rounded-full border ${cls}`} />
       <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">{label}</span>
     </button>
   );
@@ -167,7 +163,13 @@ export default function SeasonApp() {
     );
   }
   if (!data || !merged) {
-    return <p class="px-6 py-16 text-center text-app-dim">Loading season…</p>;
+    return (
+      <div class="lv-skeleton mx-auto max-w-md px-6 py-16" role="status" aria-label="Loading season">
+        <div />
+        <div />
+        <div />
+      </div>
+    );
   }
   return <SeasonShell store={store} data={data} merged={merged} profile={profile} />;
 }
@@ -298,7 +300,7 @@ function SeasonShell({
       </div>
 
       <nav
-        class="fixed inset-x-0 bottom-0 z-40 flex border-t border-app-border bg-app-surface"
+        class="lv-blurbar fixed inset-x-0 bottom-0 z-40 flex border-t border-app-border"
         style={{
           height: 'calc(64px + env(safe-area-inset-bottom))',
           paddingBottom: 'env(safe-area-inset-bottom)',

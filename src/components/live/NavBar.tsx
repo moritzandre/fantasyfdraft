@@ -28,7 +28,7 @@ export default function NavBar({ route }: { route: string }) {
   ];
   return (
     <nav
-      class="fixed inset-x-0 bottom-0 z-40 flex border-t border-app-border bg-app-surface"
+      class="lv-blurbar fixed inset-x-0 bottom-0 z-40 flex border-t border-app-border"
       style={{
         height: 'calc(64px + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',

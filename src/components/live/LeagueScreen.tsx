@@ -135,7 +135,7 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
 
   return (
     <main class="lv-tool-league mx-auto max-w-6xl px-3 pb-16">
-      <div class="sticky top-0 z-10 flex items-center gap-2 bg-app-bg py-2">
+      <div class="lv-blurbar sticky top-0 z-10 flex items-center gap-2 py-2">
         <a
           href="#/live"
           class="flex h-14 min-w-14 items-center justify-center rounded-lg border border-app-border bg-app-surface px-3 font-bold"
@@ -158,7 +158,7 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
 
       {latest.length > 0 && (
         <div
-          class="flex items-center gap-1.5 overflow-x-auto py-1.5"
+          class="lv-hscroll items-center gap-1.5 px-2 py-1.5"
           aria-label="Latest picks, newest first"
         >
           <span class="shrink-0 text-[11px] font-bold tracking-widest text-app-dim">LATEST</span>

@@ -80,20 +80,16 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
   }, [sync.status]);
   let dotLabel = 'MANUAL';
   let dotClass = 'border-app-border bg-app-border';
-  let dotStyle: Record<string, string> | undefined;
   if (sync.status === 'live') {
     const age =
       sync.lastPollAt === null
         ? null
         : Math.max(0, Math.round((Date.now() - sync.lastPollAt) / 1000));
     dotLabel = age === null ? 'LIVE' : `LIVE·${age}s`;
-    dotClass = 'border-emerald-600 bg-emerald-500';
+    dotClass = 'lv-dot-ok';
   } else if (sync.status === 'error') {
     dotLabel = 'OFFLINE';
-    dotClass = 'border-red-600';
-    dotStyle = {
-      backgroundImage: 'repeating-linear-gradient(45deg,#dc2626 0 2px,transparent 2px 4px)',
-    };
+    dotClass = 'lv-dot-bad';
   }
 
   return (
@@ -120,7 +116,7 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
         title="Sleeper sync — tap to configure"
         aria-label={`Sync: ${dotLabel}`}
       >
-        <span class={`h-3 w-3 rounded-full border ${dotClass}`} style={dotStyle} />
+        <span class={`h-3 w-3 rounded-full border ${dotClass}`} />
         <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">{dotLabel}</span>
       </button>
 
