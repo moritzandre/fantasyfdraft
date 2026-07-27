@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import type { Board, DraftState, Store } from '../../state/store';
+import { acceptUpdate, isUpdatePending } from '../../pwa';
 import { wakeLockAvailable } from '../../ui/wakelock';
 import InstallGate, { gateApplies, isStandalone } from './InstallGate';
 import { lastSaveInfo } from '../../state/persist';
@@ -54,7 +55,7 @@ export default function ReadyCheck({ s, store, board }: { s: DraftState; store: 
   const { dispatch } = store;
   const [swOk, setSwOk] = useState<boolean | null>(null);
   const [persisted, setPersisted] = useState<boolean | null>(null);
-  const [swUpdate, setSwUpdate] = useState(false);
+  const [swUpdate, setSwUpdate] = useState(() => isUpdatePending());
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -99,9 +100,13 @@ export default function ReadyCheck({ s, store, board }: { s: DraftState; store: 
 
       {gateApplies() && <InstallGate variant="banner" />}
       {swUpdate && (
-        <div class="lv-clock-near rounded-lg px-4 py-3 text-[15px] font-semibold">
-          A new build is available. Reload when you choose — never mid-draft.
-        </div>
+        <Row
+          ok={false}
+          label="New build available"
+          detail="This install is still running the previous build. Reload when you choose — never mid-draft."
+          remedy="Tap this row to reload into the new version"
+          onTap={acceptUpdate}
+        />
       )}
 
       <Row

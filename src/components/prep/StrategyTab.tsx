@@ -45,18 +45,33 @@ export default function StrategyTab({ ctx }: { ctx: PrepCtx }) {
   }, []);
   const allStrategies = { ...STRATEGIES, ...(registry ?? {}) };
 
-  // Self-play evaluation results (tools/evaluate_strategies.mjs →
-  // public/data/evaluation.json). Hidden entirely when the file is absent
-  // or was computed against a different board build (stale numbers would be
-  // worse than none).
+  // Self-play evaluation results: public/data/evaluation.json (CLI harness)
+  // AND localStorage dp:evaluation:v1 (Sim Lab browser sweeps) — the NEWER
+  // one wins when both match the current board build. Hidden entirely when
+  // neither matches (stale numbers would be worse than none). cells arrive
+  // as a flat array (summarize() output) — keyed here as [slot][strategy].
   const [evalData, setEvalData] = useState<any | null>(null);
   useEffect(() => {
+    const keyed = (d: any): any => {
+      if (!d || !Array.isArray(d.cells)) return d;
+      const cells: Record<string, Record<string, any>> = {};
+      for (const c of d.cells) (cells[String(c.slot)] = cells[String(c.slot)] ?? {})[c.strategy] = c;
+      return { ...d, cells };
+    };
+    const ts = (d: any): number => d?.savedAt ?? (d?.generatedAt ? Date.parse(d.generatedAt) : 0) ?? 0;
+    let local: any = null;
+    try {
+      local = JSON.parse(localStorage.getItem('dp:evaluation:v1') ?? 'null'); // Sim Lab artifact
+    } catch { /* corrupt/private mode — file only */ }
     fetch((import.meta as any).env.BASE_URL + 'data/evaluation.json')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d && d.buildHash === ctx.board.buildHash) setEvalData(d);
-      })
-      .catch(() => {});
+      .catch(() => null)
+      .then((file) => {
+        const fresh = [file, local]
+          .filter((d) => d && d.buildHash === ctx.board.buildHash)
+          .sort((a, b) => ts(b) - ts(a));
+        if (fresh[0]) setEvalData(keyed(fresh[0]));
+      });
   }, []);
   const evalCell = (name: string): any | null =>
     evalData?.cells?.[String(l.slot)]?.[name] ?? null;

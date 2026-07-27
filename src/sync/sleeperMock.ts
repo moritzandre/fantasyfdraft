@@ -113,6 +113,23 @@ export async function fetchDraft(
   return data as Record<string, unknown>;
 }
 
+/** GET /v1/draft/<draftId>/picks → the raw pick array (pick_no, player_id,
+    metadata, …). Additive helper for the in-app mock-calibration flow (Sim
+    Lab keeps slim {draft, picks} pairs in dp:mocks:v1). */
+export async function fetchDraftPicks(
+  draftId: string,
+  fetchFn?: (input: string, init?: RequestInit) => Promise<Response>,
+): Promise<Array<Record<string, unknown>>> {
+  const f = fetchFn ?? ((input: string, init?: RequestInit) => fetch(input, init));
+  const res = await f(`${SLEEPER_API}/draft/${encodeURIComponent(String(draftId ?? '').trim())}/picks`, {
+    cache: 'no-store',
+  } as RequestInit);
+  if (!res.ok) throw new Error(`Sleeper draft picks lookup failed (HTTP ${res.status})`);
+  const data = await res.json();
+  if (!Array.isArray(data)) throw new Error('unexpected draft picks response from Sleeper');
+  return data as Array<Record<string, unknown>>;
+}
+
 /** Mock drafts are the ones without a league — league_id is null (== also
     catches drafts that omit the key entirely). Pure — unit-tested. */
 export function isMockDraft(draft: Record<string, unknown>): boolean {

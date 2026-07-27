@@ -1,9 +1,13 @@
-// HubScreen.tsx — #/hub, the app's front door. League-profile switcher +
+// HubScreen.tsx — #/hub, the app's front door. Sleeper ACCOUNT (username →
+// real leagues → one-tap League Connect) + league-profile switcher +
 // real/practice mode toggle + tool cards. The hub is where the app stops
 // being one league's draft tool: every tool below operates on the ACTIVE
 // profile's context (see src/state/profiles.ts ctxFor), and practice mode
 // swaps in an isolated namespace so mock drafting can never touch real
-// draft prep. No modals, no confirms — destructive actions hold for 3s.
+// draft prep. Connecting a Sleeper league maps its settings onto a profile
+// automatically (src/state/account.ts mapLeagueToProfile) — no IDs to copy.
+// No modals, no confirms — destructive actions hold for 3s; disconnecting
+// the account is a plain button because it is fully reversible.
 
 import { useState } from 'preact/hooks';
 import type { DraftState } from '../../state/store';
@@ -17,6 +21,15 @@ import {
   upsertProfile,
   ctxFor,
 } from '../../state/profiles';
+import {
+  connectAccount,
+  fetchMyLeagues,
+  findProfileBySleeperLeagueId,
+  loadAccount,
+  mapLeagueToProfile,
+  saveAccount,
+} from '../../state/account';
+import type { SleeperAccount, SleeperLeague } from '../../state/account';
 import { clearPersisted } from '../../state/persist';
 import type { AppMode } from '../../state/mode';
 import HoldButton from './HoldButton';
@@ -30,9 +43,11 @@ interface Props {
 }
 
 const TOOLS: Array<[string, string, string]> = [
+  ['#/guide', 'Guide', 'how everything works — start here'],
   ['#/ready', 'Ready Check', 'board hash · SW · storage · wake lock'],
   ['#/live', 'Draft Day', 'the pick-clock cockpit'],
   ['#/prep', 'Prep', 'tiers · tags · overrides · strategy · rehearsal'],
+  ['#/sim', 'Sim Lab', 'strategy sweeps + mock calibration, in-app'],
   ['#/league', 'League', 'all 12 rosters · live draft grid'],
   ['#/log', 'Pick Log', 'review · edit · catch-up'],
   ['#/sync', 'Sleeper Sync', 'live draft + mock lobbies'],
@@ -45,6 +60,69 @@ export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Pro
   const active = profiles.profiles.find((p) => p.id === profiles.activeId)
     ?? profiles.profiles[0];
 
+  // ── Sleeper account ──────────────────────────────────────────────────────
+  const [account, setAccount] = useState<SleeperAccount | null>(() => loadAccount());
+  const [username, setUsername] = useState('');
+  const [leagues, setLeagues] = useState<SleeperLeague[] | null>(null);
+  const [accNote, setAccNote] = useState<string | null>(null);
+  const [accBusy, setAccBusy] = useState(false);
+
+  const refreshLeagues = async (acc: SleeperAccount) => {
+    const season = String(new Date().getFullYear());
+    setAccBusy(true);
+    setAccNote(`Loading your ${season} leagues…`);
+    try {
+      const found = await fetchMyLeagues(acc.userId, season);
+      setLeagues(found);
+      setAccNote(
+        found.length === 0
+          ? `No ${season} NFL leagues on ${acc.displayName} yet.`
+          : `${found.length} league${found.length === 1 ? '' : 's'} found — tap one to set it up here.`,
+      );
+    } catch (e) {
+      setAccNote(`League lookup failed: ${String((e as Error)?.message ?? e)}`);
+    } finally {
+      setAccBusy(false);
+    }
+  };
+
+  const doConnect = async () => {
+    const name = username.trim();
+    if (!name || accBusy) return;
+    setAccBusy(true);
+    setAccNote('Connecting to Sleeper…');
+    try {
+      const acc = await connectAccount(name);
+      saveAccount(acc);
+      setAccount(acc);
+      await refreshLeagues(acc); // clears busy in its finally
+    } catch (e) {
+      setAccNote(`Connect failed: ${String((e as Error)?.message ?? e)}`);
+      setAccBusy(false);
+    }
+  };
+
+  const disconnect = () => {
+    // Plain button on purpose — fully reversible, the profiles it created stay.
+    saveAccount(null);
+    setAccount(null);
+    setLeagues(null);
+    setAccNote(null);
+  };
+
+  const connectLeague = (raw: SleeperLeague) => {
+    const { profile, warnings } = mapLeagueToProfile(raw);
+    const existing = findProfileBySleeperLeagueId(profiles.profiles, profile.sleeperLeagueId);
+    const id = existing ? existing.id : newProfileId(profile.name, profiles.profiles);
+    const next: LeagueProfile = { ...profile, id };
+    onProfiles(setActiveProfile(upsertProfile(profiles, next), id));
+    setAccNote(
+      `${existing ? 'Updated' : 'Added'} “${profile.name}” from its Sleeper settings — it is now the active league.` +
+        (warnings.length ? ` ⚠ ${warnings.join(' · ')}` : ''),
+    );
+  };
+
+  // ── Manual league flow (kept — leagues outside Sleeper, or offline) ──────
   const addLeague = () => {
     const name = newName.trim();
     if (!name) return;
@@ -70,6 +148,86 @@ export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Pro
           <span class="lv-clock-near rounded-full px-4 py-2 text-[15px] font-bold">PRACTICE</span>
         )}
       </header>
+
+      {/* Sleeper account + League Connect */}
+      <section class="flex flex-col gap-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Account</h2>
+        {!account ? (
+          <>
+            <p class="text-sm text-app-dim">
+              Enter your Sleeper username once — your real leagues appear here and one tap sets
+              each of them up. No IDs to copy around.
+            </p>
+            <div class="flex gap-2">
+              <input
+                class="min-h-14 min-w-0 flex-1 rounded-xl border border-app-border bg-app-surface px-4 text-[17px]"
+                placeholder="Sleeper username"
+                autocomplete="off"
+                value={username}
+                onInput={(e) => setUsername((e.target as HTMLInputElement).value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') doConnect(); }}
+              />
+              <button
+                class="min-h-14 shrink-0 rounded-xl border border-app-accent px-5 font-bold"
+                onClick={doConnect}
+                disabled={accBusy || username.trim() === ''}
+              >
+                Connect Sleeper
+              </button>
+            </div>
+          </>
+        ) : (
+          <div class="flex flex-wrap gap-2">
+            <span class="flex min-h-14 items-center rounded-xl border border-app-accent bg-app-accent/15 px-5 font-bold">
+              Connected as {account.displayName}
+            </span>
+            <button
+              class="min-h-14 rounded-xl border border-app-border bg-app-surface px-5 font-bold"
+              onClick={() => refreshLeagues(account)}
+              disabled={accBusy}
+            >
+              Refresh leagues
+            </button>
+            <button
+              class="min-h-14 rounded-xl border border-app-border px-4 text-app-dim"
+              onClick={disconnect}
+            >
+              Disconnect
+            </button>
+          </div>
+        )}
+        {account && leagues && leagues.length > 0 && (
+          <ul class="flex flex-col gap-2">
+            {leagues.map((l: any) => {
+              const linked = findProfileBySleeperLeagueId(
+                profiles.profiles,
+                l.league_id != null ? String(l.league_id) : null,
+              );
+              return (
+                <li key={String(l.league_id ?? l.name)}>
+                  <div class="flex items-center gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-2">
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate font-bold">{String(l.name ?? 'Unnamed league')}</div>
+                      <div class="text-sm text-app-dim">
+                        {l.total_rosters ?? '?'}-team · {String(l.status ?? '')}
+                      </div>
+                    </div>
+                    <button
+                      class={`min-h-14 shrink-0 rounded-xl border px-4 font-bold ${
+                        linked ? 'border-app-accent bg-app-accent/15' : 'border-app-accent'
+                      }`}
+                      onClick={() => connectLeague(l)}
+                    >
+                      {linked ? 'Connected ✓' : 'Connect league'}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {accNote && <p class="text-sm text-app-dim">{accNote}</p>}
+      </section>
 
       {/* League switcher */}
       <section class="flex flex-col gap-3">

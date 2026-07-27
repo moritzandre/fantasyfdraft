@@ -78,6 +78,63 @@ def _weekly_rows(stats):
     return out
 
 
+def _weekly_actual_rows(stats):
+    """{week: (appliedTotal_PPR, receptions)} for the 2026 weekly ACTUALS
+    (statSourceId==0 — real results, not projections; statSplitTypeId==1,
+    scoringPeriodId 1..18). Empty until games are played. ADDITIVE for
+    build_week.py — build_board never reads actuals; the existing
+    _season_row/_weekly_rows filters are untouched."""
+    out = {}
+    for st in stats:
+        w = st.get("scoringPeriodId")
+        if (st.get("seasonId") == SEASON and st.get("statSourceId") == 0
+                and st.get("statSplitTypeId") == 1 and 1 <= (w or 0) <= 18):
+            rec = float((st.get("stats") or {}).get(STAT_IDS["rec"], 0.0))
+            out[w] = (float(st.get("appliedTotal") or 0.0), rec)
+    return out
+
+
+def load_week(cached: bool = False, limit: int = 650) -> dict:
+    """In-season weekly loader (build_week.py). Same kona endpoint with a
+    wider player limit; keeps BOTH the weekly projections (statSourceId==1)
+    and the weekly actuals (==0) per player. The raw snapshot is
+    'espn_week_<date>.json' — a DIFFERENT raw name than load(), so an
+    in-season run can never rewrite the frozen draft-board snapshot bytes
+    (and never disturbs board.json's buildHash). ADDITIVE: load() untouched.
+
+    Each player: {espn, name, pos, team, injuryStatus,
+                  weeklyProj {week: (ptsPpr, rec)},
+                  weeklyActual {week: (ptsPpr, rec)}}"""
+    filt = json.dumps({"players": {"limit": limit, "sortDraftRanks": {
+        "sortPriority": 100, "sortAsc": True, "value": "PPR"}}})
+    body, path = fetch_raw("espn_week", URL, headers={"X-Fantasy-Filter": filt},
+                           skip_same_day=cached)
+    data = loads_lenient(body)
+    players, skipped = [], 0
+    for entry in data["players"]:
+        pl = entry["player"]
+        pos = POSITION_BY_ID.get(pl.get("defaultPositionId"))
+        if pos is None:
+            skipped += 1
+            continue
+        stats = pl.get("stats") or []
+        players.append({
+            "espn": pl["id"],
+            "name": pl.get("fullName") or "",
+            "pos": pos,
+            "team": norm_team(PRO_TEAM_BY_ID.get(pl.get("proTeamId"), "")),
+            "injuryStatus": pl.get("injuryStatus") or "ACTIVE",
+            "weeklyProj": _weekly_rows(stats),
+            "weeklyActual": _weekly_actual_rows(stats),
+        })
+    print(f"  [espn_week] parsed {len(players)} players "
+          f"({skipped} at non-fantasy positions)")
+    return {"players": players, "count": len(players), "skipped": skipped,
+            "fetchedAt": datetime.datetime.now(datetime.timezone.utc)
+                .isoformat(timespec="seconds"),
+            "raw": path.name, "seasonId": SEASON}
+
+
 def load(cached: bool = False) -> dict:
     """Fetch + parse. Returns {players, count, skipped, fetchedAt, raw}.
 

@@ -25,7 +25,9 @@ import type { ProfilesState } from '../../state/profiles';
 import { getMode, setMode } from '../../state/mode';
 import type { AppMode } from '../../state/mode';
 import { loadStrategies, safeStrategyName } from '../../state/strategies';
+import { acceptUpdate, isUpdatePending } from '../../pwa';
 import '../../styles/live.css';
+import GuideScreen from './GuideScreen';
 import HubScreen from './HubScreen';
 import InstallGate, { gateApplies } from './InstallGate';
 import LeagueScreen from './LeagueScreen';
@@ -35,12 +37,14 @@ import PlanBSheet from './PlanBSheet';
 import ReadyCheck from './ReadyCheck';
 import ReviewScreen from './ReviewScreen';
 import SetupScreen from './SetupScreen';
+import SimLab from './SimLab';
 import SyncPanel from './SyncPanel';
 import PrepScreen from '../prep/PrepScreen';
 
 const DEFAULT_ROUTE = '#/hub';
 const ROUTES = new Set([
   '#/hub', '#/ready', '#/setup', '#/prep', '#/live', '#/league', '#/review', '#/log', '#/planb', '#/sync',
+  '#/guide', '#/sim',
 ]);
 
 function useRoute(): string {
@@ -89,6 +93,15 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
   const s = useStoreState(store);
   const route = useRoute();
   const [fpMismatch, setFpMismatch] = useState(false);
+  // A new build is waiting (registerType 'prompt' — never auto-swapped).
+  // Initialized from isUpdatePending() because the SW event can fire before
+  // this island mounts; the banner button IS the prompt.
+  const [swUpdate, setSwUpdate] = useState(() => isUpdatePending());
+  useEffect(() => {
+    const onUpdate = () => setSwUpdate(true);
+    document.addEventListener('dp:sw-update-available', onUpdate);
+    return () => document.removeEventListener('dp:sw-update-available', onUpdate);
+  }, []);
   const [acked, setAcked] = useState(() => {
     try {
       return sessionStorage.getItem('dp:browser-ack') === '1';
@@ -143,6 +156,15 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
 
   return (
     <div class={`lv-app ${s.ui.grayscalePreview ? 'grayscale-preview' : ''}`}>
+      {swUpdate && (
+        <button
+          type="button"
+          class="lv-clock-up block h-14 w-full px-4 text-[15px] font-bold"
+          onClick={acceptUpdate}
+        >
+          ⬆ New version ready — tap to reload
+        </button>
+      )}
       {mode === 'practice' && route !== '#/hub' && (
         <a href="#/hub" class="lv-clock-near block px-4 py-2 text-[15px] font-semibold">
           ⚑ PRACTICE MODE{activeProfile ? ` — ${activeProfile.name}` : ''} — real draft state is
@@ -194,6 +216,8 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
       {route === '#/log' && <PickLog s={s} store={store} board={board} />}
       {route === '#/sync' && <SyncPanel s={s} store={store} board={board} mode={mode} />}
       {route === '#/planb' && <PlanBSheet s={s} store={store} board={board} />}
+      {route === '#/guide' && <GuideScreen />}
+      {route === '#/sim' && <SimLab s={s} store={store} board={board} />}
     </div>
   );
 }

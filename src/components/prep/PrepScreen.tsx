@@ -1,5 +1,5 @@
-// PrepScreen.tsx — S2 Prep, the tabbed prep-mode host (#/prep). Seven tabs:
-// Board · Tiers · Tags · Overrides · Strategy · Ladder · Rehearsal.
+// PrepScreen.tsx — S2 Prep, the tabbed prep-mode host (#/prep). Eight tabs:
+// Board · Tiers · Tags · Overrides · Strategy · Strategies+ · Ladder · Rehearsal.
 // Owns the ONE prefs instance: loadPrefs at mount, every mutation
 // goes through update() which saves SYNCHRONOUSLY (dp:prefs:v1) before
 // re-rendering. `board` here is the RAW fetched board; `derived` is
@@ -17,6 +17,7 @@ import TiersTab from './TiersTab';
 import TagsTab from './TagsTab';
 import OverridesTab from './OverridesTab';
 import StrategyTab from './StrategyTab';
+import StrategyEditorTab from './StrategyEditorTab';
 import LadderTab from './LadderTab';
 import RehearsalTab from './RehearsalTab';
 
@@ -38,6 +39,7 @@ const TABS: [string, string][] = [
   ['tags', 'Tags'],
   ['overrides', 'Overrides'],
   ['strategy', 'Strategy'],
+  ['editor', 'Strategies+'],
   ['ladder', 'Ladder'],
   ['rehearsal', 'Rehearsal'],
 ];
@@ -102,6 +104,7 @@ export default function PrepScreen({ s, store, board }: { s: DraftState; store: 
         {tab === 'tags' && <TagsTab ctx={ctx} />}
         {tab === 'overrides' && <OverridesTab ctx={ctx} />}
         {tab === 'strategy' && <StrategyTab ctx={ctx} />}
+        {tab === 'editor' && <StrategyEditorTab ctx={ctx} />}
         {tab === 'ladder' && <LadderTab ctx={ctx} />}
         {tab === 'rehearsal' && <RehearsalTab ctx={ctx} />}
       </div>

@@ -38,6 +38,51 @@ export interface MockDriverOpts {
   /** Custom-strategy registry (defineStrategy outputs, e.g. from
       strategies.json) — resolves archetype names AND rides into recommend(). */
   strategies?: Record<string, object> | null;
+  /** Where calibrated opponent params (Sim Lab "Apply params" →
+      dp:opp-params:v1) are read from; default localStorage, null ⇒ none.
+      Injectable so Node tests stay hermetic. */
+  paramsStorage?: { getItem(key: string): string | null } | null;
+}
+
+/** Sim Lab mock-calibration output: {tauScale, needAwareShare, window,
+    appliedAt}. Read (never written) by the mock driver so rehearsal rooms
+    sample with the calibrated temperature — mc.json remains the offline
+    build until tools/simulate.mjs re-runs. */
+export const OPP_PARAMS_KEY = 'dp:opp-params:v1';
+
+function defaultParamsStorage(): { getItem(key: string): string | null } | null {
+  try {
+    const s = (globalThis as Record<string, unknown>).localStorage as
+      | { getItem(key: string): string | null }
+      | undefined;
+    return s && typeof s.getItem === 'function' ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The three calibratable knobs only — anything else in the stored blob
+    (appliedAt, junk) is ignored; a malformed blob is null (defaults). */
+export function loadOppParams(
+  storage: { getItem(key: string): string | null } | null,
+): Record<string, number> | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(OPP_PARAMS_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!o || typeof o !== 'object') return null;
+    const out: Record<string, number> = {};
+    // needAwareShare 0 is a legitimate grid value; tauScale/window must be > 0.
+    const min: Record<string, number> = { tauScale: 1e-9, needAwareShare: 0, window: 1 };
+    for (const k of ['tauScale', 'needAwareShare', 'window']) {
+      const v = o[k];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= min[k]) out[k] = v;
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface MockDriver {
@@ -96,7 +141,12 @@ export function createMockDriver(
 ): MockDriver {
   const league = store.getState().league; // captured — see header
   const strategies = opts.strategies ?? null;
-  const ctx = makeOpponentCtx(board, league, opponents, { strategies });
+  // Calibrated params (Sim Lab) override opponents.json params, exactly like
+  // makeOpponentCtx's cascade intends: defaults < opponents.params < these.
+  const oppParams = loadOppParams(
+    opts.paramsStorage !== undefined ? opts.paramsStorage : defaultParamsStorage(),
+  );
+  const ctx = makeOpponentCtx(board, league, opponents, { ...(oppParams ?? {}), strategies });
   const sim = makeDraftSim(ctx);
   const total = league.teams * league.rounds;
   const seed = resolveSeed(store, opts.seed);

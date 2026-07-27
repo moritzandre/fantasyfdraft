@@ -17,6 +17,7 @@ import {
   resolveUser,
 } from '../../sync/sleeperMock';
 import type { AppMode } from '../../state/mode';
+import { loadAccount } from '../../state/account';
 
 /** Subscribe to the app-wide sync manager (shared with the TopBar dot). */
 export function useSyncInfo(): ManagedSyncInfo {
@@ -59,7 +60,7 @@ export default function SyncPanel({
   };
 
   // ── Sleeper MOCK discovery (practice mode only) ─────────────────────────
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(() => loadAccount()?.username ?? '');
   const [mockUserId, setMockUserId] = useState<string | null>(null);
   const [mocks, setMocks] = useState<Array<Record<string, unknown>> | null>(null);
 

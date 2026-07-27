@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore, selectors } from './store.ts';
 import type { Board, DraftState, LeagueConfig, Store } from './store.ts';
-import { createMockDriver } from './mock.ts';
+import { OPP_PARAMS_KEY, createMockDriver } from './mock.ts';
 import type { MockDriver, MockDriverOpts } from './mock.ts';
 import { defineStrategy } from '../../engine/strategy.js';
 import { slotForPick } from '../../engine/picks.js';
@@ -212,7 +212,35 @@ test('mock: SET_UI between steps does not change the next sampled pick', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. seatArchetypes — the room's drawn character
+// 6. Calibrated opponent params (dp:opp-params:v1) reach makeOpponentCtx
+// ---------------------------------------------------------------------------
+
+test('mock: paramsStorage dp:opp-params:v1 overrides the sampler params', () => {
+  // window=1 collapses Plackett-Luce to "always the top remaining ADP", so
+  // with slot 8 the seven opponent picks MUST be idx 0..6 in order — a
+  // deterministic proof the stored params reached makeOpponentCtx. Junk and
+  // extra keys (appliedAt) must be ignored.
+  const paramsStorage = {
+    getItem: (k: string) =>
+      k === OPP_PARAMS_KEY
+        ? JSON.stringify({ tauScale: 1, needAwareShare: 0, window: 1, appliedAt: 123, junk: 'x' })
+        : null,
+  };
+  const { store, driver } = mkDriver({ slot: 8 }, NEUTRAL_OPP, { seed: 5, paramsStorage });
+  assert.equal(driver.runToMyPick(), 7);
+  assert.deepEqual(pickedIdxs(store.getState()), [0, 1, 2, 3, 4, 5, 6]);
+
+  // paramsStorage: null ⇒ defaults (window 40) — same seed must be able to
+  // deviate from strict ADP order somewhere in a full opponent run.
+  const { store: s2, driver: d2 } = mkDriver({ slot: 12 }, NEUTRAL_OPP, { seed: 5, paramsStorage: null });
+  d2.runToMyPick(); // picks 1..11
+  assert.equal(s2.getState().picks.length, 11);
+  // (No assertion on exact idxs — just that nothing threw and picks are unique.)
+  assertUniquePicks(s2.getState());
+});
+
+// ---------------------------------------------------------------------------
+// 7. seatArchetypes — the room's drawn character
 // ---------------------------------------------------------------------------
 
 test('mock: seatArchetypes reports all seats; mix ⇒ non-null, custom names resolve', () => {

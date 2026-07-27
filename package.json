@@ -10,6 +10,7 @@
     "test": "node --test \"engine/**/*.test.js\"",
     "test:tools": "node --test \"tools/**/*.test.mjs\"",
     "board": "python tools/build_board.py && python tools/verify_board.py && node tools/simulate.mjs",
+    "week": "python tools/build_week.py && python tools/verify_week.py",
     "pdfs": "python tools/make_pdfs.py"
   },
   "dependencies": {

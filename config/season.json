@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "default": {
+      "sleeperLeagueId": null,
+      "endWeek": 17,
+      "espnLimit": 650
+    }
+  }
+}

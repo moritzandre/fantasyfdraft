@@ -24,6 +24,39 @@ URL = "https://api.sleeper.app/v1/players/nfl"
 FANTASY_POS = {"QB", "RB", "WR", "TE", "K", "DEF"}
 
 
+def load_meta(cached: bool = True) -> dict:
+    """Per-id metadata for the in-season pipeline (build_week.py):
+    {by_id: {sleeper_id: {name, pos, team, injury, depth}}}. Reuses the
+    same-day-cached raw dump — same raw file as load(), never a second
+    14 MB fetch on the same day. ADDITIVE: load() untouched.
+
+    DEF rows are keyed by team code with pos normalized to 'DST' (the
+    board's convention); their name is '<City> <Nickname>'."""
+    body, path = fetch_raw("sleeper", URL, skip_same_day=True)
+    players = loads_lenient(body)
+
+    by_id = {}
+    for pid, p in players.items():
+        pos = p.get("position")
+        if pos not in FANTASY_POS:
+            continue
+        name = (p.get("full_name") or "").strip()
+        if not name:
+            name = f"{p.get('first_name') or ''} {p.get('last_name') or ''}".strip()
+        by_id[pid] = {
+            "name": name,
+            "pos": "DST" if pos == "DEF" else pos,
+            "team": norm_team(p.get("team")) or (norm_team(pid) if pos == "DEF" else ""),
+            "injury": p.get("injury_status") or None,
+            "depth": p.get("depth_chart_order"),
+        }
+    print(f"  [sleeper] meta for {len(by_id)} fantasy-position ids")
+    return {"by_id": by_id, "count": len(players),
+            "fetchedAt": datetime.datetime.now(datetime.timezone.utc)
+                .isoformat(timespec="seconds"),
+            "raw": path.name}
+
+
 def load(cached: bool = True) -> dict:
     """Fetch (same-day cached) + index. Returns
     {by_name, dst_by_team, count, fetchedAt, raw} where

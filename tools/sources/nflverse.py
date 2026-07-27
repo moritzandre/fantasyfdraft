@@ -42,9 +42,13 @@ def load(cached: bool = False) -> dict:
         f"nflverse: expected {EXPECTED_ROWS} rows for {SEASON}, got {len(rows)}"
     assert weeks == list(range(1, 19)), f"nflverse: weeks {weeks} != 1..18"
 
-    # Per-team game weeks and team-perspective spread samples
+    # Per-team game weeks and team-perspective spread samples. ADDITIVE for
+    # build_week.py: per-team opponent strings ('KC' home / '@KC' away, None
+    # on bye) and completed-week detection from the score columns.
     played: dict[str, set[int]] = {}
     margins: dict[str, list[tuple[int, float]]] = {}
+    opp: dict[str, list] = {}
+    week_done: dict[int, bool] = {}
     for r in rows:
         week = int(r["week"])
         line = float(r["spread_line"]) if r["spread_line"] else None
@@ -53,6 +57,18 @@ def load(cached: bool = False) -> dict:
             played.setdefault(team, set()).add(week)
             if line is not None:
                 margins.setdefault(team, []).append((week, sign * line))
+        opp.setdefault(home, [None] * 18)[week - 1] = away
+        opp.setdefault(away, [None] * 18)[week - 1] = "@" + home
+        done = bool((r.get("home_score") or "").strip()) \
+            and bool((r.get("away_score") or "").strip())
+        week_done[week] = week_done.get(week, True) and done
+
+    # actualThrough = last week with EVERY game scored, no gaps (pre-season 0)
+    actual_through = 0
+    for w in range(1, 19):
+        if not week_done.get(w, False):
+            break
+        actual_through = w
 
     byes, sos = {}, {}
     for team, wk in sorted(played.items()):
@@ -68,8 +84,10 @@ def load(cached: bool = False) -> dict:
     assert len(byes) == 32, f"nflverse: {len(byes)} teams != 32"
 
     print(f"  [nflverse] {len(rows)} rows, 32 teams, byes weeks "
-          f"{min(byes.values())}..{max(byes.values())}")
+          f"{min(byes.values())}..{max(byes.values())}, "
+          f"actualThrough {actual_through}")
     return {"count": len(rows), "byes": byes, "sos": sos,
+            "opp": opp, "actualThrough": actual_through,
             "fetchedAt": datetime.datetime.now(datetime.timezone.utc)
                 .isoformat(timespec="seconds"),
             "raw": path.name}
