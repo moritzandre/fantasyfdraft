@@ -1,0 +1,33 @@
+{
+  "_shape": {
+    "_doc": [
+      "Leaguemate tendency profiles (plan, 'Leaguemate tendency profiles').",
+      "One entry per draft seat 1..12; seat 8 is you and is ignored by the",
+      "opponent model. Defaults are NEUTRAL so everything works untouched;",
+      "fill in what you actually know and the MC opponent model + live",
+      "need prediction sharpen accordingly.",
+      "",
+      "name:          display label for the pick log / opponent rail.",
+      "adpDiscipline: 0..1 — 0 = wild reacher, 1 = strict ADP drafter.",
+      "               0.5 = neutral (default Plackett-Luce temperature).",
+      "positionBias:  multiplicative pos weights, e.g. {\"RB\": 1.2} for a",
+      "               known RB-heavy drafter. {} = neutral.",
+      "homerTeams:    NFL team codes they overdraft, e.g. [\"DAL\"].",
+      "reachRounds:   rounds where they historically reach, e.g. [1, 2]."
+    ]
+  },
+  "seats": [
+    { "seat": 1,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 2,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 3,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 4,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 5,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 6,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 7,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 8,  "name": "ME (slot 8)", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 9,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 10, "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 11, "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },
+    { "seat": 12, "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "_shape": {
+    "_doc": [
+      "Hand-pinned crosswalk fixes, consulted AFTER DynastyProcess and",
+      "FantasyCalc id maps and BEFORE the normalized-name fallback",
+      "(tools/sources/crosswalk.py). Add an entry here whenever",
+      "build_board.py fails its top-250 unmatched gate and prints the",
+      "unmatched report. Keys of byEspnId are ESPN player ids AS STRINGS.",
+      "All three inner keys are optional; pin only what the automatic",
+      "crosswalk gets wrong.",
+      "'ffc' is FFC's player_id (integer from the adp payload);",
+      "'sleeper' is Sleeper's player_id (string);",
+      "'fantasycalc' is FantasyCalc's player.id (integer)."
+    ],
+    "byEspnId": {
+      "4429795": { "sleeper": "9221", "ffc": 5672, "fantasycalc": 9509 }
+    }
+  },
+  "byEspnId": {}
+}
