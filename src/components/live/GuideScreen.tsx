@@ -22,9 +22,9 @@ const jump = (id: string) => {
 
 function Section({ id, title, children }: { id: string; title: string; children: any }) {
   return (
-    <section id={`guide-${id}`} class="scroll-mt-36 pt-5">
-      <h2 class="pb-2 text-xs font-bold tracking-widest text-app-dim">{title}</h2>
-      <div class="flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface p-4 text-[15px] leading-relaxed">
+    <section id={`guide-${id}`} class="lv-tool-guide scroll-mt-36 pt-5">
+      <h2 class="lv-h-tool pb-2 text-xs font-bold tracking-widest">{title}</h2>
+      <div class="lv-sect flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface p-4 text-[15px] leading-relaxed">
         {children}
       </div>
     </section>
@@ -46,7 +46,7 @@ export default function GuideScreen() {
           >
             ← Hub
           </a>
-          <h1 class="flex-1 text-lg font-bold">Guide</h1>
+          <h1 class="lv-h-tool lv-tool-guide flex-1 text-lg font-bold">Guide</h1>
         </div>
         <nav class="flex gap-1 overflow-x-auto pb-1" aria-label="Jump to section">
           {SECTIONS.map(([id, chip]) => (

@@ -89,7 +89,7 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
   const onClock = selectors.onClockSlot(s);
 
   return (
-    <main class="mx-auto max-w-6xl px-3 pb-16">
+    <main class="lv-tool-league mx-auto max-w-6xl px-3 pb-16">
       <div class="sticky top-0 z-10 flex items-center gap-2 bg-app-bg py-2">
         <a
           href="#/live"
@@ -97,12 +97,12 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
         >
           ← Live
         </a>
-        <h1 class="flex-1 text-lg font-bold">League</h1>
+        <h1 class="lv-h-tool flex-1 text-lg font-bold">League</h1>
         {(['rosters', 'grid'] as Mode[]).map((m) => (
           <button
             type="button"
             class={`h-14 rounded-lg border px-4 font-bold ${
-              mode === m ? 'border-accent bg-accent text-app-bg' : 'border-app-border bg-app-surface'
+              mode === m ? 'lv-seg-on' : 'border-app-border bg-app-surface'
             }`}
             onClick={() => setMode(m)}
           >
@@ -162,7 +162,9 @@ export default function LeagueScreen({ s, store, board }: { s: DraftState; store
                 <ul class="flex flex-col gap-0.5">
                   {slots.map((b) => (
                     <li class="flex items-center gap-2 text-sm">
-                      <span class="num w-10 shrink-0 text-xs font-bold text-app-dim">{b.label}</span>
+                      <span class={`lv-post lv-post-${b.pos.toLowerCase()} num w-10 shrink-0 rounded text-center text-xs font-bold`}>
+                        {b.label}
+                      </span>
                       {b.player ? (
                         <span class={`truncate lv-pos-${b.player.pos.toLowerCase()}`}>
                           {abbrevName(b.player.name)}

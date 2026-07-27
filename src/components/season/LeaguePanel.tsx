@@ -45,7 +45,7 @@ export default function LeaguePanel({ ss, store, merged, profile }: SeasonScreen
           <div class="text-sm">
             {adds.map(([pid, rid]) => (
               <span key={pid} class="mr-3">
-                <span class="font-bold text-accent">＋</span> {txName(pid)}
+                <span class="lv-good font-bold">＋</span> {txName(pid)}
                 <span class="text-app-dim"> → {teamLabel(ss, rid as number)}</span>
               </span>
             ))}
@@ -70,7 +70,7 @@ export default function LeaguePanel({ ss, store, merged, profile }: SeasonScreen
 
       {/* ── Connect / status ─────────────────────────────────────────────── */}
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Sleeper sync</h2>
+        <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">Sleeper sync</h2>
         {ss.leagueId === null ? (
           <>
             {profile.sleeperLeagueId && (
@@ -142,7 +142,7 @@ export default function LeaguePanel({ ss, store, merged, profile }: SeasonScreen
 
       {/* ── Which team is me ─────────────────────────────────────────────── */}
       <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">
+        <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">
           Which team is me
         </h2>
         {ss.rosters.length === 0 ? (
@@ -176,7 +176,7 @@ export default function LeaguePanel({ ss, store, merged, profile }: SeasonScreen
       {/* ── Standings ────────────────────────────────────────────────────── */}
       {standings.length > 0 && (
         <section class="flex flex-col gap-2">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Standings</h2>
+          <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">Standings</h2>
           <ol class="rounded-xl border border-app-border bg-app-surface">
             {standings.map((r, i) => (
               <li
@@ -201,7 +201,7 @@ export default function LeaguePanel({ ss, store, merged, profile }: SeasonScreen
 
       {/* ── Transactions ─────────────────────────────────────────────────── */}
       <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Transactions</h2>
+        <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">Transactions</h2>
         {ss.transactions.length === 0 ? (
           <p class="text-sm text-app-dim">No transactions synced yet.</p>
         ) : (

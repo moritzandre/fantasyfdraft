@@ -95,12 +95,16 @@ export default function RosterRail({ s, store, board }: { s: DraftState; store: 
         {slots.map((b) => (
           <div
             class={`flex min-h-[52px] items-center gap-2 rounded-lg border px-2 ${
-              b.player ? 'border-app-border bg-app-surface' : 'border-dashed border-app-border/80 bg-transparent'
+              b.player
+                ? 'border-app-border bg-app-surface'
+                : `border-dashed lv-slot-${b.pos.toLowerCase()}`
             }`}
           >
             <span
-              class={`lv-pos-${b.pos.toLowerCase()} num w-11 shrink-0 pb-0.5 text-center text-[13px] font-bold ${
-                b.player ? '' : 'text-app-dim'
+              class={`num w-11 shrink-0 rounded text-center text-[12px] font-bold ${
+                b.player
+                  ? `lv-posc lv-posc-${b.pos.toLowerCase()}`
+                  : `lv-post lv-post-${b.pos.toLowerCase()}`
               }`}
             >
               {b.label}

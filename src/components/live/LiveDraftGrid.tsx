@@ -62,7 +62,9 @@ export default function LiveDraftGrid({
                   <td
                     class={`h-[52px] px-1 align-middle ${
                       slot === s.league.slot ? 'lv-grid-me' : ''
-                    } ${isCursor ? 'lv-grid-cursor' : ''}`}
+                    } ${player ? `lv-cell-${player.pos.toLowerCase()}` : ''} ${
+                      isCursor ? 'lv-grid-cursor' : ''
+                    }`}
                   >
                     {player ? (
                       <span class={`inline-block max-w-full truncate lv-pos-${player.pos.toLowerCase()}`}>

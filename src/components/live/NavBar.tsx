@@ -9,20 +9,22 @@ interface Item {
   href: string;
   label: string;
   glyph: string;
+  /** tool-hue class (live.css .lv-tool-*) — colors the active state */
+  tool: string;
   external?: boolean;
 }
 
 export default function NavBar({ route }: { route: string }) {
   const base = (import.meta as any).env?.BASE_URL ?? '/';
   const items: Item[] = [
-    { href: '#/hub', label: 'Hub', glyph: '⌂' },
-    { href: '#/live', label: 'Draft', glyph: '▶' },
-    { href: '#/league', label: 'League', glyph: '⚏' },
-    { href: '#/sim', label: 'Sim', glyph: '∿' },
-    { href: base + 'season', label: 'Season', glyph: '⚑', external: true },
+    { href: '#/hub', label: 'Hub', glyph: '⌂', tool: 'lv-tool-hub' },
+    { href: '#/live', label: 'Draft', glyph: '▶', tool: 'lv-tool-draft' },
+    { href: '#/league', label: 'League', glyph: '⚏', tool: 'lv-tool-league' },
+    { href: '#/sim', label: 'Sim', glyph: '∿', tool: 'lv-tool-sim' },
+    { href: base + 'season', label: 'Season', glyph: '⚑', tool: 'lv-tool-season', external: true },
     // Prep moved off the bar — it stays one tap away via More and the Hub;
     // More is the full directory, so EVERY screen is reachable from the bar.
-    { href: '#/more', label: 'More', glyph: '▤' },
+    { href: '#/more', label: 'More', glyph: '▤', tool: 'lv-tool-hub' },
   ];
   return (
     <nav
@@ -39,8 +41,8 @@ export default function NavBar({ route }: { route: string }) {
           <a
             key={it.href}
             href={it.href}
-            class={`flex h-full min-w-14 flex-1 flex-col items-center justify-center gap-0.5 ${
-              active ? 'text-accent' : 'text-app-dim'
+            class={`lv-navitem ${it.tool} flex h-full min-w-14 flex-1 flex-col items-center justify-center gap-0.5 ${
+              active ? '' : 'text-app-dim'
             }`}
             aria-current={active ? 'page' : undefined}
           >

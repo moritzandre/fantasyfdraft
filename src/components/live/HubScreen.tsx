@@ -42,25 +42,26 @@ interface Props {
   onMode(next: AppMode): void;
 }
 
-const TOOLS: Array<[string, string, string]> = [
-  ['#/guide', 'Guide', 'how everything works — start here'],
-  ['#/ready', 'Ready Check', 'board hash · SW · storage · wake lock'],
-  ['#/live', 'Draft Day', 'the pick-clock cockpit'],
+// [href, title, blurb, lv-tool-* hue class] — the 4th entry only colors the card.
+const TOOLS: Array<[string, string, string, string]> = [
+  ['#/guide', 'Guide', 'how everything works — start here', 'lv-tool-guide'],
+  ['#/ready', 'Ready Check', 'board hash · SW · storage · wake lock', 'lv-tool-draft'],
+  ['#/live', 'Draft Day', 'the pick-clock cockpit', 'lv-tool-draft'],
   // The Season page is a separate PAGE, not a hash route — full href on purpose.
   // NO trailing slash: with Astro trailingSlash 'ignore' the SW precaches the
   // page under the key 'season', and only the slash-less URL hits it offline.
-  [import.meta.env.BASE_URL + 'season', 'Season', 'lineup coach · waivers · Trade Desk'],
+  [import.meta.env.BASE_URL + 'season', 'Season', 'lineup coach · waivers · Trade Desk', 'lv-tool-season'],
   // Season deep links — same slash-less base + '#/…' hash convention as the
   // Season card above, so the SW's 'season' precache key still matches offline.
-  [import.meta.env.BASE_URL + 'season#/coach', 'Lineup Coach', 'weekly start/sit with reasons'],
-  [import.meta.env.BASE_URL + 'season#/waivers', 'Waivers', 'pickup targets ranked by roster need'],
-  [import.meta.env.BASE_URL + 'season#/trade', 'Trade Desk', 'sandbox trade evaluator — works with zero sync'],
-  ['#/prep', 'Prep', 'tiers · tags · overrides · strategy · rehearsal'],
-  ['#/sim', 'Sim Lab', 'strategy sweeps + mock calibration, in-app'],
-  ['#/league', 'League', 'all 12 rosters · live draft grid'],
-  ['#/log', 'Pick Log', 'review · edit · catch-up'],
-  ['#/sync', 'Sleeper Sync', 'live draft + mock lobbies'],
-  ['#/planb', 'Plan B', 'the printed board, on screen'],
+  [import.meta.env.BASE_URL + 'season#/coach', 'Lineup Coach', 'weekly start/sit with reasons', 'lv-tool-season'],
+  [import.meta.env.BASE_URL + 'season#/waivers', 'Waivers', 'pickup targets ranked by roster need', 'lv-tool-season'],
+  [import.meta.env.BASE_URL + 'season#/trade', 'Trade Desk', 'sandbox trade evaluator — works with zero sync', 'lv-tool-season'],
+  ['#/prep', 'Prep', 'tiers · tags · overrides · strategy · rehearsal', 'lv-tool-draft'],
+  ['#/sim', 'Sim Lab', 'strategy sweeps + mock calibration, in-app', 'lv-tool-sim'],
+  ['#/league', 'League', 'all 12 rosters · live draft grid', 'lv-tool-league'],
+  ['#/log', 'Pick Log', 'review · edit · catch-up', 'lv-tool-draft'],
+  ['#/sync', 'Sleeper Sync', 'live draft + mock lobbies', 'lv-tool-sync'],
+  ['#/planb', 'Plan B', 'the printed board, on screen', 'lv-tool-draft'],
 ];
 
 export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Props) {
@@ -160,7 +161,7 @@ export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Pro
 
       {/* Sleeper account + League Connect */}
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Account</h2>
+        <h2 class="lv-h-tool lv-tool-sync text-sm font-semibold uppercase tracking-wide">Account</h2>
         {!account ? (
           <>
             <p class="text-sm text-app-dim">
@@ -240,7 +241,7 @@ export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Pro
 
       {/* League switcher */}
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">League</h2>
+        <h2 class="lv-h-tool lv-tool-league text-sm font-semibold uppercase tracking-wide">League</h2>
         <div class="flex flex-wrap gap-2">
           {profiles.profiles.map((p) => (
             <button
@@ -293,7 +294,7 @@ export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Pro
 
       {/* Mode toggle */}
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Mode</h2>
+        <h2 class="lv-h-tool lv-tool-hub text-sm font-semibold uppercase tracking-wide">Mode</h2>
         <div class="grid grid-cols-2 gap-2">
           <button
             class={`min-h-14 rounded-xl border font-bold ${
@@ -320,15 +321,15 @@ export default function HubScreen({ s, profiles, mode, onProfiles, onMode }: Pro
 
       {/* Tools */}
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Tools</h2>
+        <h2 class="lv-h-tool lv-tool-hub text-sm font-semibold uppercase tracking-wide">Tools</h2>
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {TOOLS.map(([href, title, blurb]) => (
+          {TOOLS.map(([href, title, blurb, tool]) => (
             <a
               key={href}
               href={href}
-              class="flex min-h-14 flex-col justify-center rounded-xl border border-app-border bg-app-surface px-4 py-3"
+              class={`lv-toolcard ${tool} flex min-h-14 flex-col justify-center rounded-xl border border-app-border bg-app-surface px-4 py-3`}
             >
-              <span class="font-bold">{title}</span>
+              <span class="lv-h-tool font-bold">{title}</span>
               <span class="text-sm text-app-dim">{blurb}</span>
             </a>
           ))}

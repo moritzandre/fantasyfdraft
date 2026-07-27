@@ -51,7 +51,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
 
       {/* Teams */}
       <section class="mt-3">
-        <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">TEAMS</h2>
+        <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">TEAMS</h2>
         <div class="flex gap-1">
           {TEAM_OPTIONS.map((t) => (
             <button
@@ -69,7 +69,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
 
       {/* THE slot picker — every slot 1..N selectable at runtime, 8 default */}
       <section class="mt-4">
-        <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">YOUR DRAFT SLOT</h2>
+        <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">YOUR DRAFT SLOT</h2>
         <div class="grid grid-cols-7 gap-1">
           {Array.from({ length: l.teams }, (_, i) => i + 1).map((slot) => (
             <button
@@ -103,7 +103,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
       {/* Rounds + snake */}
       <section class="mt-4 flex gap-4">
         <div class="flex-1">
-          <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">ROUNDS</h2>
+          <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">ROUNDS</h2>
           <div class="flex items-center gap-1">
             <button
               type="button"
@@ -123,7 +123,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
           </div>
         </div>
         <div class="flex-1">
-          <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">ORDER</h2>
+          <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">ORDER</h2>
           <button
             type="button"
             class={`h-14 w-full rounded-lg border px-3 font-bold ${
@@ -138,7 +138,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
 
       {/* Roster steppers */}
       <section class="mt-4">
-        <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">ROSTER</h2>
+        <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">ROSTER</h2>
         <div class="grid grid-cols-2 gap-2">
           {ROSTER_ORDER.map((pos) => (
             <div class="flex items-center justify-between rounded-lg border border-app-border bg-app-surface px-3 py-1">
@@ -167,7 +167,7 @@ export default function SetupScreen({ s, store }: { s: DraftState; store: Store 
 
       {/* Strategy */}
       <section class="mt-4">
-        <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">STRATEGY</h2>
+        <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">STRATEGY</h2>
         <div class="flex flex-col gap-1">
           {strategies.map(({ name: id, label, blurb, custom }) => (
             <button

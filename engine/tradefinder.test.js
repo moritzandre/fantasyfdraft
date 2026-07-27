@@ -3,13 +3,19 @@ import assert from 'node:assert/strict';
 import {
   findTrades,
   positionalNeeds,
-  NOTE_THEY_GAIN,
   NOTE_MARKET,
+  NOTE_MARKET_LOSS,
+  NOTE_PREMIUM,
+  NOTE_THEY_GAIN,
+  NOTE_VALUE_EVEN,
+  noteNeedsFit,
+  TIER_RANK,
 } from './tradefinder.js';
 
 // ---------------------------------------------------------------------------
-// findTrades fixture — 2 partners, no FLEX so every lineup is hand-computable
-// (constant weekly lines over 4 weeks: ros delta = weekly delta × 4).
+// Main fixture — 2 partners, no FLEX so every lineup is hand-computable
+// (constant weekly lines over 4 weeks: ros delta = weekly delta × 4; the
+// 'likely' ros tolerance = 1 pt/wk × 4 weeks = 4, doubled to 8 on needs-fit).
 //
 // League: {RB: 2, TE: 1}. My before-lineup: 12 + 10 + 5 = 27/wk (ros 108).
 // I have an RB surplus (myRB3 rides the bench) and a weak TE.
@@ -31,23 +37,26 @@ const myRB3 = mk('myRB3', 'RB', 8, 25);
 const myTE1 = mk('myTE1', 'TE', 5, 10);
 const MY = [myRB1, myRB2, myRB3, myTE1];
 
-// Alpha: thin at RB behind their RB1, but TWO startable TEs — the natural
-// "my spare RB for their spare TE" partner. Before-lineup 11 + 4 + 8 = 23/wk.
+// Alpha: ONE live RB for two RB slots (positionalNeeds: RB severity 2) and a
+// TE surplus — the natural "my spare RB for their spare TE" partner.
+// Before-lineup 11 + 0 + 8 = 19/wk (ros 76).
 const p1RB1 = mk('p1RB1', 'RB', 11, 35);
-const p1RB2 = mk('p1RB2', 'RB', 4, 8);
 const p1TE1 = mk('p1TE1', 'TE', 8, 22);
 const p1TE2 = mk('p1TE2', 'TE', 6, 12);
+const p1TE3 = mk('p1TE3', 'TE', 4, 6);
 
-// Beta: a stud RB they would only move in a consolidation deal.
-// Before-lineup 15 + 9 + 7 = 31/wk.
+// Beta: owns the market-stud RB and exactly one startable TE.
+// Before-lineup 15 + 9 + 7 = 31/wk (ros 124). No positional needs.
 const p2RB1 = mk('p2RB1', 'RB', 15, 50);
 const p2RB2 = mk('p2RB2', 'RB', 9, 28);
 const p2TE1 = mk('p2TE1', 'TE', 7, 18);
 
 const PARTNERS = [
-  { id: 1, label: 'Alpha', roster: [p1RB1, p1RB2, p1TE1, p1TE2] },
+  { id: 1, label: 'Alpha', roster: [p1RB1, p1TE1, p1TE2, p1TE3] },
   { id: 2, label: 'Beta', roster: [p2RB1, p2RB2, p2TE1] },
 ];
+
+const ALL_TIERS = { minTier: 'longshot', maxResults: 100 };
 
 const sameSet = (arr, expected) =>
   arr.length === expected.length && expected.every((p) => arr.includes(p));
@@ -56,7 +65,7 @@ const findResult = (results, give, get) =>
   results.find((r) => sameSet(r.give, give) && sameSet(r.get, get));
 
 // ---------------------------------------------------------------------------
-// findTrades
+// findTrades — hard gates
 // ---------------------------------------------------------------------------
 
 test('empty partners (or empty rosters) → []', () => {
@@ -65,48 +74,167 @@ test('empty partners (or empty rosters) → []', () => {
   assert.deepEqual(findTrades([], PARTNERS, CTX), []);
 });
 
-test('2-for-1 appears when it beats every 1-for-1', () => {
+test('star-swap guard: stud-for-two-fillers is gone at every tier', () => {
+  const results = findTrades(MY, PARTNERS, CTX, ALL_TIERS);
+  // The old finder ranked "myRB2+myRB3 for Beta's stud" #1 (+20 ros for me,
+  // fc 55 for 50 = "they win the market view"). Best received fc is 30 <
+  // 0.65 × 50 = 32.5 — nobody trades their #1 RB for two mid pieces.
+  assert.equal(findResult(results, [myRB2, myRB3], [p2RB1]), undefined);
+  // A lone bench filler for the stud dies the same way (25 < 32.5).
+  assert.equal(findResult(results, [myRB3], [p2RB1]), undefined);
+  // But a package HEADLINED by a near-stud (fc 40 ≥ 32.5) may pass the guard:
+  const headlined = findResult(results, [myRB1, myRB3], [p2RB1]);
+  assert.ok(headlined, 'star guard admits a package with a matching headliner');
+});
+
+test('startability: stripping the only startable TE is hard-rejected even market-fair', () => {
+  const results = findTrades(MY, PARTNERS, CTX, ALL_TIERS);
+  // myRB3 (fc 25) for Beta's only TE (fc 18): Beta WINS the market view by
+  // +7 — the old finder accepted it via the market escape. Beta would end
+  // with zero startable TEs: hard-rejected at every tier.
+  assert.equal(findResult(results, [myRB3], [p2TE1]), undefined);
+  // Same when the TE leaves inside a 1-for-2 package.
+  assert.equal(findResult(results, [myRB1], [p2RB1, p2TE1]), undefined);
+  // And Beta never sends BOTH RBs for one (2 slots, 1 live body left).
+  assert.equal(findResult(results, [myRB1], [p2RB1, p2RB2]), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// findTrades — tiers
+// ---------------------------------------------------------------------------
+
+test("mutually-need-fitting fair trade ranks 'likely' and #1", () => {
   const results = findTrades(MY, PARTNERS, CTX);
   assert.ok(results.length > 0);
 
-  // Hand-computed best: send myRB2+myRB3 for Beta's stud. My RBs 15+12 vs
-  // 12+10 → +5/wk → +20 ros. Beta loses 20 ros but wins the market view
-  // (receives fc 55 for fc 50) — plausible via the market branch.
+  // Hand-computed best: my bench RB (8/wk, fc 25) for Alpha's spare TE
+  // (8/wk, fc 22). Me: TE 5→8 = +3/wk → +12 ros. Alpha: fills the empty RB
+  // slot AND keeps a TE starter — 11+8+6 = 25 vs 19 → +24 ros; market +3.
   const top = results[0];
-  assert.equal(top.partnerId, 2);
-  assert.ok(sameSet(top.give, [myRB2, myRB3]));
-  assert.ok(sameSet(top.get, [p2RB1]));
-  assert.equal(top.my.rosDelta, 20);
-  assert.equal(top.their.rosDelta, -20);
-  assert.equal(top.fairnessNote, NOTE_MARKET);
-
-  // …and it outranks the best surviving 1-for-1.
-  const best1for1 = results.find((r) => r.give.length === 1 && r.get.length === 1);
-  assert.ok(best1for1);
-  assert.ok(best1for1.my.rosDelta < top.my.rosDelta);
+  assert.equal(top.partnerId, 1);
+  assert.ok(sameSet(top.give, [myRB3]));
+  assert.ok(sameSet(top.get, [p1TE1]));
+  assert.equal(top.tier, 'likely');
+  assert.equal(top.my.rosDelta, 12);
+  assert.equal(top.their.rosDelta, 24);
+  assert.ok(top.why.includes(noteNeedsFit('RB')), 'why names the RB need it fills');
+  assert.ok(top.why.includes(NOTE_MARKET));
+  assert.ok(top.why.includes(NOTE_THEY_GAIN));
 });
 
-test('a lopsided trade the partner clearly loses is filtered', () => {
+test('tiers are ordered likely > stretch, myGain ranks within a tier', () => {
   const results = findTrades(MY, PARTNERS, CTX);
-  // myRB3 (bench) for Beta's stud would be my best trade (+20) — but Beta
-  // loses 28 ros AND the market view (fc 25 for fc 50): nobody accepts it.
-  assert.equal(findResult(results, [myRB3], [p2RB1]), undefined);
-  // Straight TE swap myTE1→p1TE1: Alpha's loss (−8) is just outside the
-  // fairness band (−0.6 × 12 = −7.2) and they lose the market — filtered.
+  // No longshots at the default minTier.
+  assert.ok(results.every((r) => r.tier !== 'longshot'));
+  // Tier ranks never increase down the list.
+  for (let i = 1; i < results.length; i += 1) {
+    assert.ok(TIER_RANK[results[i].tier] <= TIER_RANK[results[i - 1].tier]);
+  }
+  // The +12 stretch consolidation ranks BELOW a +4 likely trade.
+  const stretch12 = findResult(results, [myRB1, myRB3], [p2RB1]);
+  assert.ok(stretch12);
+  assert.equal(stretch12.tier, 'stretch');
+  assert.equal(stretch12.my.rosDelta, 12);
+  assert.equal(stretch12.their.rosDelta, -12);
+  const likely4 = findResult(results, [myRB2], [p1TE1]);
+  assert.ok(likely4);
+  assert.equal(likely4.tier, 'likely');
+  assert.equal(likely4.my.rosDelta, 4);
+  assert.ok(results.indexOf(stretch12) > results.indexOf(likely4));
+});
+
+test("modest-premium trade (my +8, their market −4%) is 'stretch'", () => {
+  // Dedicated fixture at market scale: I upgrade my TE by 2/wk (+8 ros);
+  // the partner eats a 4-point market premium on a 100-value package —
+  // inside MARKET_TOL = max(2, 8% × 100) = 8, but not ≥ 0 ⇒ never 'likely'.
+  const sRB1 = mk('sRB1', 'RB', 12, 400);
+  const sRB2 = mk('sRB2', 'RB', 10, 300);
+  const sTE1 = mk('sTE1', 'TE', 5, 96);
+  const tRB1 = mk('tRB1', 'RB', 11, 380);
+  const tRB2 = mk('tRB2', 'RB', 9, 250);
+  const tTE1 = mk('tTE1', 'TE', 7, 100);
+  const tTE2 = mk('tTE2', 'TE', 6, 90);
+  const results = findTrades(
+    [sRB1, sRB2, sTE1],
+    [{ id: 9, roster: [tRB1, tRB2, tTE1, tTE2] }],
+    CTX,
+  );
+  const r = findResult(results, [sTE1], [tTE1]);
+  assert.ok(r, 'premium trade shows at the default minTier');
+  assert.equal(r.tier, 'stretch');
+  assert.equal(r.my.rosDelta, 8);
+  assert.equal(r.their.marketDelta, -4); // −4% of the 100-value package
+  assert.ok(r.why.includes(NOTE_PREMIUM));
+});
+
+test("longshot: market says they lose, my model says fair — hidden by default", () => {
+  // 1 RB for 2 TEs: Alpha nets +16 ros in MY model but pays 9 on a 34-value
+  // market package (beyond MARKET_TOL 2.72) — old-style plausible, market no.
+  const withLongshots = findTrades(MY, PARTNERS, CTX, ALL_TIERS);
+  const ls = findResult(withLongshots, [myRB3], [p1TE1, p1TE2]);
+  assert.ok(ls);
+  assert.equal(ls.tier, 'longshot');
+  assert.equal(ls.my.rosDelta, 12);
+  assert.equal(ls.their.rosDelta, 16);
+  assert.ok(ls.why.includes(NOTE_MARKET_LOSS));
+
+  // Default (minTier 'stretch') and 'likely' hide it.
+  assert.equal(findResult(findTrades(MY, PARTNERS, CTX), [myRB3], [p1TE1, p1TE2]), undefined);
+  const likelyOnly = findTrades(MY, PARTNERS, CTX, { minTier: 'likely', maxResults: 100 });
+  assert.ok(likelyOnly.every((r) => r.tier === 'likely'));
+  assert.equal(findResult(likelyOnly, [myRB1, myRB3], [p2RB1]), undefined); // stretch gone too
+});
+
+test('a trade failing even the longshot band is dropped entirely', () => {
+  const results = findTrades(MY, PARTNERS, CTX, ALL_TIERS);
+  // Straight TE swap myTE1→p1TE1: Alpha loses the market by 12 (tol 2) AND
+  // loses 8 ros — outside −fairness × myGain = −7.2. Nobody accepts.
   assert.equal(findResult(results, [myTE1], [p1TE1]), undefined);
 });
 
+// ---------------------------------------------------------------------------
+// findTrades — fc-null fallback (windowed-ros parity replaces the market)
+// ---------------------------------------------------------------------------
+
+test('fc-null fallback: parity plays the market test', () => {
+  const nRB1 = mk('nRB1', 'RB', 12, null);
+  const nRB2 = mk('nRB2', 'RB', 10, null);
+  const nRB3 = mk('nRB3', 'RB', 8, null);
+  const nTE1 = mk('nTE1', 'TE', 5, null);
+  const qRB1 = mk('qRB1', 'RB', 11, null);
+  const qTE1 = mk('qTE1', 'TE', 8, null);
+  const qTE2 = mk('qTE2', 'TE', 6, null);
+  const me = [nRB1, nRB2, nRB3, nTE1];
+  const them = [{ id: 5, roster: [qRB1, qTE1, qTE2] }];
+
+  // Equal-window swap (32 vs 32, parity 1 ≥ 0.9) that fills their RB hole:
+  // 'likely' through the fallback path, flagged as value-based.
+  const results = findTrades(me, them, CTX);
+  const r = findResult(results, [nRB3], [qTE1]);
+  assert.ok(r);
+  assert.equal(r.tier, 'likely');
+  assert.equal(r.my.rosDelta, 12);
+  assert.equal(r.their.rosDelta, 24);
+  assert.equal(r.my.marketDelta, null); // fc never fabricated
+  assert.ok(r.why.includes(NOTE_VALUE_EVEN));
+  assert.ok(r.why.includes(noteNeedsFit('RB')));
+
+  // Parity 20/32 = 0.625 < 0.75 AND outside the longshot ros band → gone
+  // everywhere (my weak TE for their starter, nothing real coming back).
+  const all = findTrades(me, them, CTX, ALL_TIERS);
+  assert.equal(findResult(all, [nTE1], [qTE1]), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// findTrades — pruning, options
+// ---------------------------------------------------------------------------
+
 test('pruning never drops the known-best hand-computed trades', () => {
   const results = findTrades(MY, PARTNERS, CTX, { maxResults: 100 });
-  // Overall best (2-for-1, +20) survives the candidate cap + band prune:
-  assert.ok(findResult(results, [myRB2, myRB3], [p2RB1]));
-  // Best 1-for-1 (spare RB for Alpha's spare TE, a mutual win) survives too:
-  const winWin = findResult(results, [myRB3], [p1TE1]);
-  assert.ok(winWin);
-  assert.equal(winWin.partnerId, 1);
-  assert.equal(winWin.my.rosDelta, 12); // TE 5→8 = +3/wk × 4
-  assert.equal(winWin.their.rosDelta, 8); // RB 11+8 vs 11+4, TE 8→6 = +2/wk
-  assert.equal(winWin.fairnessNote, NOTE_THEY_GAIN);
+  // The likely win-win survives the candidate cap + band prune…
+  assert.ok(findResult(results, [myRB3], [p1TE1]));
+  // …and so does the star-headlined stretch consolidation.
+  assert.ok(findResult(results, [myRB1, myRB3], [p2RB1]));
 });
 
 test('targeted mode only returns trades receiving the target pos', () => {
@@ -115,27 +243,19 @@ test('targeted mode only returns trades receiving the target pos', () => {
   for (const r of results) {
     assert.ok(r.get.some((p) => p.pos === 'TE'), 'every GET side includes a TE');
   }
-  // The RB consolidation blockbuster is out of scope in TE mode.
-  assert.equal(findResult(results, [myRB2, myRB3], [p2RB1]), undefined);
-  // The TE win-win is still in.
+  // The RB consolidation is out of scope in TE mode; the win-win is in.
+  assert.equal(findResult(results, [myRB1, myRB3], [p2RB1]), undefined);
   assert.ok(findResult(results, [myRB3], [p1TE1]));
 });
 
-test('market-plausible trade carries the market fairness note', () => {
-  const results = findTrades(MY, PARTNERS, CTX, { maxResults: 100 });
-  // myRB3 for Beta's TE: Beta loses 28 ros (outside the band) but receives
-  // fc 25 for fc 18 → plausible ONLY via the market branch.
-  const r = findResult(results, [myRB3], [p2TE1]);
-  assert.ok(r);
-  assert.equal(r.my.rosDelta, 8); // TE 5→7 = +2/wk × 4
-  assert.equal(r.their.rosDelta, -28); // their only TE walks; myRB3 rides pine
-  assert.equal(r.fairnessNote, NOTE_MARKET);
-});
-
 test('minMyGain and maxResults are respected', () => {
-  const strict = findTrades(MY, PARTNERS, CTX, { minMyGain: 15 });
-  assert.equal(strict.length, 1); // only the +20 consolidation clears 15
-  for (const r of strict) assert.ok(r.my.rosDelta >= 15);
+  const strict = findTrades(MY, PARTNERS, CTX, { minMyGain: 10 });
+  // Exactly the three +12 survivors clear 10: two likely, one stretch.
+  assert.equal(strict.length, 3);
+  for (const r of strict) assert.ok(r.my.rosDelta >= 10);
+  assert.ok(findResult(strict, [myRB3], [p1TE1]));
+  assert.ok(findResult(strict, [myRB3, myTE1], [p1TE1]));
+  assert.ok(findResult(strict, [myRB1, myRB3], [p2RB1]));
 
   const capped = findTrades(MY, PARTNERS, CTX, { maxResults: 3 });
   assert.equal(capped.length, 3);

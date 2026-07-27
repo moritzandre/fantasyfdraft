@@ -114,11 +114,11 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
 
       <a
         href="#/league"
-        class="flex h-14 min-w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-app-border bg-app-surface px-1 font-bold"
+        class="lv-tool-league flex h-14 min-w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-app-border bg-app-surface px-1 font-bold"
         title="League — all rosters + draft grid"
         aria-label="League view"
       >
-        <span class="text-sm">LG</span>
+        <span class="lv-h-tool text-sm">LG</span>
         <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">LEAGUE</span>
       </a>
 

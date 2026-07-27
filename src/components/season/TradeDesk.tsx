@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { evaluateTrade } from '../../../engine/trade.js';
-import { findTrades, positionalNeeds } from '../../../engine/tradefinder.js';
+import { findTrades, positionalNeeds, TIER_RANK } from '../../../engine/tradefinder.js';
 import { weekEff } from '../../../engine/week.js';
 import { seasonSelectors } from '../../state/season';
 import type { ResolvedPlayer } from '../../state/seasonMerge';
@@ -51,17 +51,23 @@ export default function TradeDesk({
   // ---- Trade FINDER ------------------------------------------------------
   // Suggestions require a synced league (my roster + at least one partner);
   // the search runs ONLY on the Find button (state, never per-render) — the
-  // sync compute is fast (<100ms over 11 rosters, engine/tradefinder.js
-  // pruning) but still deferred one tick so the "Searching…" row paints.
+  // sync compute is fast (~150–200ms over 11 rosters, engine/tradefinder.js
+  // realism gates prune before any lineup math) but still deferred one tick
+  // so the "Searching…" row paints. One search always fetches ALL tiers
+  // (minTier 'longshot'); the tier chips filter client-side so switching
+  // Likely / +Stretch / +Longshot never re-runs the engine.
+  type Tier = 'likely' | 'stretch' | 'longshot';
   interface FinderResult {
     partnerId: number;
     give: ResolvedPlayer[];
     get: ResolvedPlayer[];
     my: any;
     their: any;
-    fairnessNote: string;
+    tier: Tier;
+    why: string[];
   }
   const [mode, setMode] = useState('ALL');
+  const [minTier, setMinTier] = useState<Tier>('stretch');
   const [finder, setFinder] = useState<{
     status: 'idle' | 'running' | 'done';
     results: FinderResult[];
@@ -107,10 +113,26 @@ export default function TradeDesk({
         myPlayers,
         partners,
         { fromWeek: week, endWeek, playoffWeeks: PLAYOFF_WEEKS, slots, flexEligible },
-        { targetPos: mode === 'ALL' ? null : mode },
+        { targetPos: mode === 'ALL' ? null : mode, minTier: 'longshot', maxResults: 30 },
       ) as FinderResult[];
       setFinder({ status: 'done', results, collapsed: false });
     }, 30);
+  };
+
+  // Engine ranks tier-first (likely > stretch > longshot), so a client-side
+  // tier filter preserves the engine's ordering.
+  const visibleResults = finder.results.filter(
+    (r) => TIER_RANK[r.tier] >= TIER_RANK[minTier],
+  );
+  const tierChips: { id: Tier; label: string; hint: string }[] = [
+    { id: 'likely', label: 'Likely', hint: 'they say yes as-is' },
+    { id: 'stretch', label: '+Stretch', hint: 'small premium asks' },
+    { id: 'longshot', label: '+Longshot', hint: 'market frowns on these' },
+  ];
+  const TIER_BADGE: Record<Tier, string> = {
+    likely: 'lv-clock-up',
+    stretch: 'lv-clock-near',
+    longshot: 'lv-clock-far',
   };
 
   // Tap a suggestion → load it INTO the evaluator (both columns + SENDS
@@ -120,11 +142,6 @@ export default function TradeDesk({
     setA({ rosterId: ss.myRosterId, sandbox: [], sends: r.give.map((p) => p.key) });
     setB({ rosterId: r.partnerId, sandbox: [], sends: r.get.map((p) => p.key) });
     setFinder((f) => ({ ...f, collapsed: true }));
-  };
-
-  const marketLabel = (m: number | null): string | null => {
-    if (m === null) return null;
-    return Math.abs(m) < 3 ? 'market even' : `market ${signedInt(m)}`;
   };
 
   // A first successful sync after mount adopts my roster as side A — but
@@ -427,20 +444,45 @@ export default function TradeDesk({
           </p>
         )}
 
-        {finder.status === 'done' && finder.results.length > 0 && finder.collapsed && (
+        {finder.status === 'done' && finder.results.length > 0 && (
+          <div class="flex flex-wrap items-center gap-2">
+            {tierChips.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                class={`min-h-14 rounded-xl border px-4 font-bold ${
+                  minTier === t.id ? 'border-accent bg-accent/15' : 'border-app-border bg-app-bg'
+                }`}
+                onClick={() => setMinTier(t.id)}
+                title={t.hint}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {finder.status === 'done' && finder.results.length > 0 && visibleResults.length === 0 && (
+          <p class="text-sm text-app-dim">
+            Nothing at this tier — tap {minTier === 'likely' ? '+Stretch or ' : ''}+Longshot to
+            widen the net.
+          </p>
+        )}
+
+        {finder.status === 'done' && visibleResults.length > 0 && finder.collapsed && (
           <button
             type="button"
             class="min-h-14 rounded-xl border border-app-border bg-app-bg px-4 text-left font-bold"
             onClick={() => setFinder((f) => ({ ...f, collapsed: false }))}
           >
-            Trade loaded below ↓ — show {finder.results.length} suggestion
-            {finder.results.length === 1 ? '' : 's'} again
+            Trade loaded below ↓ — show {visibleResults.length} suggestion
+            {visibleResults.length === 1 ? '' : 's'} again
           </button>
         )}
 
-        {finder.status === 'done' && finder.results.length > 0 && !finder.collapsed && (
+        {finder.status === 'done' && visibleResults.length > 0 && !finder.collapsed && (
           <ul class="rounded-xl border border-app-border">
-            {finder.results.map((r, i) => (
+            {visibleResults.map((r, i) => (
               <li key={i}>
                 <button
                   type="button"
@@ -448,17 +490,22 @@ export default function TradeDesk({
                   onClick={() => loadSuggestion(r)}
                   title="Tap to load into the evaluator below"
                 >
-                  <span class="min-w-0 truncate">
-                    <span class="font-bold">Give {r.give.map((p) => p.short).join(' + ')}</span>
-                    <span class="text-app-dim"> ⇄ </span>
-                    <span class="font-bold">Get {r.get.map((p) => p.short).join(' + ')}</span>
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span
+                      class={`${TIER_BADGE[r.tier]} shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase`}
+                    >
+                      {r.tier}
+                    </span>
+                    <span class="min-w-0 truncate">
+                      <span class="font-bold">Give {r.give.map((p) => p.short).join(' + ')}</span>
+                      <span class="text-app-dim"> ⇄ </span>
+                      <span class="font-bold">Get {r.get.map((p) => p.short).join(' + ')}</span>
+                    </span>
                   </span>
                   <span class="num truncate text-[13px] text-app-dim">
                     {teamLabel(ss, r.partnerId)} · you {signed1(r.my.rosDelta)} ROS · them{' '}
                     {signed1(r.their.rosDelta)}
-                    {marketLabel(r.my.marketDelta) !== null &&
-                      ` · ${marketLabel(r.my.marketDelta)}`}
-                    {` · ${r.fairnessNote}`}
+                    {r.why.length > 0 && ` · ${r.why.join(' · ')}`}
                   </span>
                 </button>
               </li>

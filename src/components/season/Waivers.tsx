@@ -91,7 +91,11 @@ export default function Waivers({
             key={p}
             type="button"
             class={`min-h-14 rounded-xl border px-4 font-bold ${
-              pos === p ? 'border-accent bg-accent/15' : 'border-app-border bg-app-surface'
+              pos === p
+                ? p === 'ALL'
+                  ? 'border-accent bg-accent/15'
+                  : `lv-posc lv-posc-${p.toLowerCase()} border-transparent`
+                : 'border-app-border bg-app-surface'
             }`}
             onClick={() => setPos(p)}
           >
@@ -117,9 +121,10 @@ export default function Waivers({
             <div class="min-w-0 flex-1 leading-tight">
               <div class="truncate font-bold">
                 {fa.short}{' '}
-                <span class="font-normal text-app-dim">
-                  {fa.pos} · {fa.team}
-                </span>
+                <span class={`lv-post lv-post-${fa.pos.toLowerCase()} num rounded px-1 text-[11px] font-bold`}>
+                  {fa.pos}
+                </span>{' '}
+                <span class="font-normal text-app-dim">{fa.team}</span>
                 {fa.injury && (
                   <span class="lv-clock-near ml-2 rounded px-1.5 py-0.5 text-[11px] font-bold">
                     {fa.injury}
@@ -143,10 +148,10 @@ export default function Waivers({
               </div>
             </div>
             <div class="num shrink-0 text-right text-sm leading-tight">
-              <div class={weekGain > 0.05 ? 'font-bold text-accent' : 'text-app-dim'}>
+              <div class={weekGain > 0.05 ? 'lv-good font-bold' : 'text-app-dim'}>
                 wk {signed1(weekGain)}
               </div>
-              <div class={rosGain > 0.05 ? 'font-bold' : 'text-app-dim'}>
+              <div class={rosGain > 0.05 ? 'lv-good font-bold' : 'text-app-dim'}>
                 ros {signed1(rosGain)}
               </div>
             </div>

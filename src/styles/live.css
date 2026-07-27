@@ -83,13 +83,15 @@
 }
 
 /* Tier: 4px left border, luminance from the tokens.css ramp (channel 1),
-   plus the letter chip (channel 2) — grayscale-safe by construction. */
-.lv-tier-a { border-left: 4px solid var(--tier-a-bg); }
-.lv-tier-b { border-left: 4px solid var(--tier-b-bg); }
-.lv-tier-c { border-left: 4px solid var(--tier-c-bg); }
-.lv-tier-d { border-left: 4px solid var(--tier-d-bg); }
-.lv-tier-e { border-left: 4px solid var(--tier-e-bg); }
-.lv-tier-f { border-left: 4px solid var(--tier-f-bg); }
+   plus the letter chip (channel 2) — grayscale-safe by construction.
+   In-app only, the band also washes in from the left edge (background-IMAGE
+   longhand so Tailwind bg-color utilities on the same element still win). */
+.lv-tier-a { border-left: 4px solid var(--tier-a-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-a-bg) 10%, transparent), transparent 60%); }
+.lv-tier-b { border-left: 4px solid var(--tier-b-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-b-bg) 10%, transparent), transparent 60%); }
+.lv-tier-c { border-left: 4px solid var(--tier-c-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-c-bg) 10%, transparent), transparent 60%); }
+.lv-tier-d { border-left: 4px solid var(--tier-d-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-d-bg) 10%, transparent), transparent 60%); }
+.lv-tier-e { border-left: 4px solid var(--tier-e-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-e-bg) 10%, transparent), transparent 60%); }
+.lv-tier-f { border-left: 4px solid var(--tier-f-bg); background-image: linear-gradient(90deg, color-mix(in oklab, var(--tier-f-bg) 10%, transparent), transparent 60%); }
 
 .lv-chip-a { background: var(--tier-a-bg); color: var(--tier-a-fg); }
 .lv-chip-b { background: var(--tier-b-bg); color: var(--tier-b-fg); }
@@ -213,9 +215,180 @@
 .lv-grid-cursor {
   outline: 2px solid var(--clock-up);
   outline-offset: -2px;
-  animation: lv-cursor-pulse 1.6s ease-in-out infinite;
 }
 @keyframes lv-cursor-pulse {
   0%, 100% { outline-color: var(--clock-up); }
   50% { outline-color: transparent; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APP-ONLY COLOR SYSTEM — screen tokens, never imported by any print page.
+   Three coordinated sets, all oklch at matched lightness/chroma so they read
+   as one family on the dark chrome:
+     1. TOOL hues     — one hue per tool/system, wayfinding (nav, cards, headers)
+     2. SEMANTIC set  — success/warn/danger, mapped from the clock tokens
+     3. POSITION set  — stronger in-app versions of the tokens.css pos hues
+   Contrast contract: --posc-fg on any solid chip ≥ 6.7:1; any tool/tint text
+   on bg/surface ≥ 6.8:1. Color is NEVER the only channel — labels stay.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 1 ── tool hues (L .72–.76, C ~.13 — siblings of --app-accent) */
+  --tool-hub:    oklch(0.72 0.14 250);  /* blue — the brand accent's hue */
+  --tool-draft:  oklch(0.72 0.15 150);  /* green — the pick clock's "go" */
+  --tool-league: oklch(0.72 0.14 320);  /* magenta */
+  --tool-sim:    oklch(0.74 0.13 200);  /* cyan */
+  --tool-season: oklch(0.76 0.14 85);   /* amber-gold */
+  --tool-guide:  oklch(0.74 0.14 55);   /* orange */
+  --tool-sync:   oklch(0.70 0.14 290);  /* violet */
+
+  /* 2 ── semantic (bg-strength + text-strength pairs) */
+  --sem-ok:        var(--clock-up);
+  --sem-ok-text:   oklch(0.74 0.15 150);
+  --sem-warn:      var(--clock-near);
+  --sem-warn-text: oklch(0.78 0.13 85);
+  --sem-bad:       oklch(0.60 0.19 25);
+  --sem-bad-text:  oklch(0.72 0.16 25);
+
+  /* 3 ── position chips: solid fills (dark text) per tokens.css pos hues */
+  --posc-fg:  oklch(0.17 0.02 265);
+  --posc-qb:  oklch(0.72 0.13 320);
+  --posc-rb:  oklch(0.74 0.14 150);
+  --posc-wr:  oklch(0.74 0.12 250);
+  --posc-te:  oklch(0.76 0.13 60);
+  --posc-k:   oklch(0.74 0.03 250);
+  --posc-dst: oklch(0.68 0.03 250);
+  --posc-flex: oklch(0.74 0.06 250);
+}
+
+/* ── Tool hue carriers: set --tool-c; consumers read it (inherits down) ── */
+.lv-tool-hub    { --tool-c: var(--tool-hub); }
+.lv-tool-draft  { --tool-c: var(--tool-draft); }
+.lv-tool-league { --tool-c: var(--tool-league); }
+.lv-tool-sim    { --tool-c: var(--tool-sim); }
+.lv-tool-season { --tool-c: var(--tool-season); }
+.lv-tool-guide  { --tool-c: var(--tool-guide); }
+.lv-tool-sync   { --tool-c: var(--tool-sync); }
+
+/* Section header / title tinted with its tool hue (≥6.8:1 on bg/surface) */
+.lv-h-tool { color: var(--tool-c, var(--app-text-dim)); }
+
+/* Tool card (Hub/More grids): colored left edge; title uses .lv-h-tool */
+.lv-toolcard { border-left: 4px solid var(--tool-c, var(--app-border)); }
+@media (hover: hover) {
+  .lv-toolcard:hover {
+    border-color: color-mix(in oklab, var(--tool-c, var(--app-accent)) 45%, var(--app-border));
+    border-left-color: var(--tool-c, var(--app-accent));
+    background-color: color-mix(in oklab, var(--tool-c, var(--app-accent)) 7%, var(--app-surface));
+  }
+}
+
+/* Section card with a tool-colored left edge (SimLab, Guide, Sync) */
+.lv-sect { border-left: 3px solid var(--tool-c, var(--app-border)); }
+
+/* Nav items (bottom bars): active = tool-colored text + top indicator bar */
+.lv-navitem { position: relative; }
+.lv-navitem[aria-current='page'] { color: var(--tool-c, var(--app-accent)); }
+.lv-navitem[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 22%;
+  right: 22%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--tool-c, var(--app-accent));
+}
+
+/* Segmented-control "on" state filled with the ambient tool hue */
+.lv-seg-on {
+  background-color: var(--tool-c, var(--app-accent));
+  border-color: var(--tool-c, var(--app-accent));
+  color: var(--app-bg);
+}
+
+/* ── Semantic text + tag chips (always beside a text label) ───────────── */
+.lv-good { color: var(--sem-ok-text); }
+.lv-warn-t { color: var(--sem-warn-text); }
+.lv-tag-ok   { background: color-mix(in oklab, var(--sem-ok) 18%, transparent);   color: var(--sem-ok-text); }
+.lv-tag-warn { background: color-mix(in oklab, var(--sem-warn) 18%, transparent); color: var(--sem-warn-text); }
+.lv-tag-bad  { background: color-mix(in oklab, var(--sem-bad) 18%, transparent);  color: var(--sem-bad-text); }
+
+/* ── Position chips — SOLID: filled hue, dark text (BoardList rows, filter
+   chips, RecCards meta, RosterRail filled slots). Letterform stays inside —
+   never color-only. */
+.lv-posc     { color: var(--posc-fg); background-color: var(--app-border); }
+.lv-posc-qb  { background-color: var(--posc-qb); }
+.lv-posc-rb  { background-color: var(--posc-rb); }
+.lv-posc-wr  { background-color: var(--posc-wr); }
+.lv-posc-te  { background-color: var(--posc-te); }
+.lv-posc-k   { background-color: var(--posc-k); }
+.lv-posc-dst { background-color: var(--posc-dst); }
+.lv-posc-flex { background-color: var(--posc-flex); }
+
+/* Position chips — TINT: dim wash + hue-tinted text (LeagueScreen roster
+   lines, season rows, empty roster slots). Text ≥7:1 on surface. */
+.lv-post {
+  background-color: color-mix(in oklab, var(--app-text-dim) 12%, transparent);
+  color: var(--app-text-dim);
+}
+.lv-post-qb  { background-color: color-mix(in oklab, var(--posc-qb) 16%, transparent);  color: color-mix(in oklab, var(--posc-qb) 65%, var(--app-text)); }
+.lv-post-rb  { background-color: color-mix(in oklab, var(--posc-rb) 16%, transparent);  color: color-mix(in oklab, var(--posc-rb) 65%, var(--app-text)); }
+.lv-post-wr  { background-color: color-mix(in oklab, var(--posc-wr) 16%, transparent);  color: color-mix(in oklab, var(--posc-wr) 65%, var(--app-text)); }
+.lv-post-te  { background-color: color-mix(in oklab, var(--posc-te) 16%, transparent);  color: color-mix(in oklab, var(--posc-te) 65%, var(--app-text)); }
+.lv-post-k   { background-color: color-mix(in oklab, var(--posc-k) 16%, transparent);   color: color-mix(in oklab, var(--posc-k) 65%, var(--app-text)); }
+.lv-post-dst { background-color: color-mix(in oklab, var(--posc-dst) 16%, transparent); color: color-mix(in oklab, var(--posc-dst) 65%, var(--app-text)); }
+.lv-post-flex { background-color: color-mix(in oklab, var(--posc-flex) 14%, transparent); color: color-mix(in oklab, var(--posc-flex) 65%, var(--app-text)); }
+
+/* Empty roster slot boxes: dim wash of the position they're waiting for */
+.lv-slot-qb  { background-color: color-mix(in oklab, var(--posc-qb) 7%, transparent);  border-color: color-mix(in oklab, var(--posc-qb) 30%, var(--app-border)); }
+.lv-slot-rb  { background-color: color-mix(in oklab, var(--posc-rb) 7%, transparent);  border-color: color-mix(in oklab, var(--posc-rb) 30%, var(--app-border)); }
+.lv-slot-wr  { background-color: color-mix(in oklab, var(--posc-wr) 7%, transparent);  border-color: color-mix(in oklab, var(--posc-wr) 30%, var(--app-border)); }
+.lv-slot-te  { background-color: color-mix(in oklab, var(--posc-te) 7%, transparent);  border-color: color-mix(in oklab, var(--posc-te) 30%, var(--app-border)); }
+.lv-slot-k   { background-color: color-mix(in oklab, var(--posc-k) 7%, transparent);   border-color: color-mix(in oklab, var(--posc-k) 30%, var(--app-border)); }
+.lv-slot-dst { background-color: color-mix(in oklab, var(--posc-dst) 7%, transparent); border-color: color-mix(in oklab, var(--posc-dst) 30%, var(--app-border)); }
+.lv-slot-flex { background-color: color-mix(in oklab, var(--posc-flex) 6%, transparent); border-color: color-mix(in oklab, var(--posc-flex) 30%, var(--app-border)); }
+
+/* LiveDraftGrid cells: subtle position wash so runs read as color streaks.
+   Declared AFTER .lv-grid-me so a filled cell in my column keeps its streak
+   color (my column stays identified by header + cursor + empty-cell tint). */
+.lv-cell-qb  { background-color: color-mix(in oklab, var(--posc-qb) 13%, transparent); }
+.lv-cell-rb  { background-color: color-mix(in oklab, var(--posc-rb) 13%, transparent); }
+.lv-cell-wr  { background-color: color-mix(in oklab, var(--posc-wr) 13%, transparent); }
+.lv-cell-te  { background-color: color-mix(in oklab, var(--posc-te) 13%, transparent); }
+.lv-cell-k   { background-color: color-mix(in oklab, var(--posc-k) 10%, transparent); }
+.lv-cell-dst { background-color: color-mix(in oklab, var(--posc-dst) 10%, transparent); }
+
+/* ── SimLab progress bar (fill color = ambient tool hue) ───────────────── */
+.lv-progress { height: 12px; overflow: hidden; border-radius: 6px; background: var(--app-bg); }
+.lv-progress-fill { height: 100%; background: var(--tool-c, var(--app-accent)); }
+
+/* ── Motion: micro-interactions, entrance fade, pulses. ALL gated on
+   prefers-reduced-motion — with it off, everything is instant + static. ── */
+@keyframes lv-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* shared press + state transitions on every tappable */
+  .lv-app :is(button, a) {
+    transition:
+      transform 130ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      opacity 150ms ease;
+  }
+  .lv-app :is(button, a):active { transform: scale(0.97); }
+
+  /* route content entrance — opacity only (sticky/fixed children survive) */
+  .lv-app main,
+  .lv-app .lv-root { animation: lv-enter 160ms ease-out; }
+
+  /* the cursor cell pulse (static outline when motion is reduced) */
+  .lv-grid-cursor { animation: lv-cursor-pulse 1.6s ease-in-out infinite; }
+
+  /* score decomposition + sweep progress animate their widths */
+  .lv-bar > span { transition: width 300ms ease; }
+  .lv-progress-fill { transition: width 350ms ease; }
 }

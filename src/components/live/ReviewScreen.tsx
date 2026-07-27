@@ -186,15 +186,15 @@ export default function ReviewScreen({
         <>
           <section class="num mt-3 flex gap-4 rounded-xl border border-app-border bg-app-surface p-3 text-center">
             <div class="flex-1">
-              <div class="text-2xl font-bold">{matches}/{graded.length}</div>
+              <div class="lv-good text-2xl font-bold">{matches}/{graded.length}</div>
               <div class="text-xs text-app-dim">engine match</div>
             </div>
             <div class="flex-1">
-              <div class="text-2xl font-bold">{evens}</div>
+              <div class="text-2xl font-bold text-accent">{evens}</div>
               <div class="text-xs text-app-dim">even (Δ&lt;{eps})</div>
             </div>
             <div class="flex-1">
-              <div class="text-2xl font-bold">{fmt1(totalDelta)}</div>
+              <div class="lv-warn-t text-2xl font-bold">{fmt1(totalDelta)}</div>
               <div class="text-xs text-app-dim">pts left on the board</div>
             </div>
           </section>
@@ -205,7 +205,7 @@ export default function ReviewScreen({
 
       {history.length > 0 && (
         <section class="mt-6">
-          <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">HISTORY</h2>
+          <h2 class="lv-h-tool lv-tool-draft pb-1 text-xs font-bold tracking-widest">HISTORY</h2>
           <ul class="flex flex-col gap-1.5">
             {history.map((r) => (
               <li class="rounded-lg border border-app-border bg-app-surface">

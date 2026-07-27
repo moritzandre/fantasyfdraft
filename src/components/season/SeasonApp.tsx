@@ -32,14 +32,15 @@ import WeekCoach from './WeekCoach';
 const DEFAULT_ROUTE = '#/coach';
 const ROUTES = new Set(['#/coach', '#/waivers', '#/trade', '#/league']);
 
-const TABS: Array<[string, string]> = [
+// [href, label, lv-tool-* hue class] — the hue only colors the active state.
+const TABS: Array<[string, string, string]> = [
   // First entry jumps back to the draft app's Hub — a full href, never
   // matched as the active route (symmetry with the draft app's NavBar).
-  [import.meta.env.BASE_URL + '#/hub', '⌂ Hub'],
-  ['#/coach', 'Coach'],
-  ['#/waivers', 'Waivers'],
-  ['#/trade', 'Trade'],
-  ['#/league', 'League'],
+  [import.meta.env.BASE_URL + '#/hub', '⌂ Hub', 'lv-tool-hub'],
+  ['#/coach', 'Coach', 'lv-tool-season'],
+  ['#/waivers', 'Waivers', 'lv-tool-season'],
+  ['#/trade', 'Trade', 'lv-tool-season'],
+  ['#/league', 'League', 'lv-tool-season'],
 ];
 
 function useRoute(): string {
@@ -303,13 +304,14 @@ function SeasonShell({
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}
       >
-        {TABS.map(([hash, label]) => (
+        {TABS.map(([hash, label, tool]) => (
           <a
             key={hash}
             href={hash}
-            class={`flex h-full flex-1 items-center justify-center text-[15px] font-bold ${
-              route === hash ? 'text-accent' : 'text-app-dim'
+            class={`lv-navitem ${tool} flex h-full flex-1 items-center justify-center text-[15px] font-bold ${
+              route === hash ? '' : 'text-app-dim'
             }`}
+            aria-current={route === hash ? 'page' : undefined}
           >
             {label}
           </a>

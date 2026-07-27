@@ -164,7 +164,7 @@ export default function SyncPanel({
         >
           ← Live
         </a>
-        <h1 class="flex-1 text-lg font-bold">Sleeper sync</h1>
+        <h1 class="lv-h-tool lv-tool-sync flex-1 text-lg font-bold">Sleeper sync</h1>
       </div>
 
       <p class="pt-1 text-sm text-app-dim">
@@ -182,7 +182,7 @@ export default function SyncPanel({
 
       {/* Draft ID */}
       <section class="mt-4">
-        <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">SLEEPER DRAFT ID</h2>
+        <h2 class="lv-h-tool lv-tool-sync pb-1 text-xs font-bold tracking-widest">SLEEPER DRAFT ID</h2>
         <div class="flex gap-1">
           <input
             type="text"
@@ -206,7 +206,7 @@ export default function SyncPanel({
 
       {/* League ID alternative */}
       <section class="mt-4">
-        <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">
+        <h2 class="lv-h-tool lv-tool-sync pb-1 text-xs font-bold tracking-widest">
           …OR FIND IT FROM THE LEAGUE ID
         </h2>
         <div class="flex gap-1">
@@ -234,8 +234,8 @@ export default function SyncPanel({
       {/* Sleeper MOCK drafts — practice mode only: discovery via username
           (mocks have no league_id, so the league lookup can never find them) */}
       {mode === 'practice' && (
-        <section class="mt-4 rounded-xl border border-app-border bg-app-surface/50 p-3">
-          <h2 class="pb-1 text-xs font-bold tracking-widest text-app-dim">
+        <section class="lv-sect lv-tool-sync mt-4 rounded-xl border border-app-border bg-app-surface/50 p-3">
+          <h2 class="lv-h-tool pb-1 text-xs font-bold tracking-widest">
             SLEEPER MOCK DRAFT (PRACTICE)
           </h2>
           <p class="pb-2 text-sm text-app-dim">

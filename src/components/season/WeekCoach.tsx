@@ -102,9 +102,10 @@ export default function WeekCoach({
         <div class="min-w-0 flex-1 leading-tight">
           <div class="truncate font-bold">
             {p.short}{' '}
-            <span class="font-normal text-app-dim">
-              {p.pos} · {p.team}
-            </span>
+            <span class={`lv-post lv-post-${p.pos.toLowerCase()} num rounded px-1 text-[11px] font-bold`}>
+              {p.pos}
+            </span>{' '}
+            <span class="font-normal text-app-dim">{p.team}</span>
             {onBye && (
               <span class="ml-2 rounded border border-app-border px-1.5 py-0.5 text-[11px] font-bold">
                 BYE
@@ -121,7 +122,13 @@ export default function WeekCoach({
             {opp && `${band ? ' · ' : ''}vs ${opp}`}
           </div>
         </div>
-        {tag && <span class="shrink-0 text-[11px] font-bold text-accent">{tag}</span>}
+        {tag && (
+          <span
+            class={`${tag === 'START' ? 'lv-tag-ok' : 'lv-tag-warn'} shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold`}
+          >
+            {tag}
+          </span>
+        )}
       </li>
     );
   };
@@ -147,7 +154,7 @@ export default function WeekCoach({
         <div class="num text-sm text-app-dim">
           optimal {fmt1(advice.optimalTotal)} · current {fmt1(advice.currentTotal)}
         </div>
-        <div class={`text-2xl font-bold ${advice.delta > 0.05 ? 'text-accent' : ''}`}>
+        <div class={`text-2xl font-bold ${advice.delta > 0.05 ? 'lv-warn-t' : 'lv-good'}`}>
           {advice.delta > 0.05
             ? `${signed1(advice.delta)} pts sitting on your bench`
             : 'Lineup is optimal ✓'}
@@ -157,7 +164,7 @@ export default function WeekCoach({
       {/* Swap list */}
       {advice.swaps.length > 0 && (
         <section class="flex flex-col gap-2">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Start / sit</h2>
+          <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">Start / sit</h2>
           <ul class="flex flex-col gap-2">
             {advice.swaps.map((sw: any) => {
               const inn = sw.in as ResolvedPlayer;
@@ -171,7 +178,7 @@ export default function WeekCoach({
                 >
                   <div class="font-bold">
                     Start {inn.short} over {out ? out.short : 'empty slot'}{' '}
-                    <span class="num text-accent">{signed1(sw.gain)}</span>{' '}
+                    <span class="lv-good num">{signed1(sw.gain)}</span>{' '}
                     <span class="font-normal text-app-dim">· {sw.slot}</span>
                   </div>
                   <div class="num mt-0.5 text-[13px] text-app-dim">
@@ -194,7 +201,7 @@ export default function WeekCoach({
 
       {/* Roster */}
       <section class="flex flex-col gap-2">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">
+        <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">
           Current starters
         </h2>
         <ul class="rounded-xl border border-app-border bg-app-surface">
@@ -206,7 +213,7 @@ export default function WeekCoach({
             </li>
           )}
         </ul>
-        <h2 class="mt-2 text-sm font-semibold uppercase tracking-wide text-app-dim">Bench</h2>
+        <h2 class="lv-h-tool lv-tool-season mt-2 text-sm font-semibold uppercase tracking-wide">Bench</h2>
         <ul class="rounded-xl border border-app-border bg-app-surface">
           {bench.map((p) => row(p, optimalKeys.has(p.key) ? 'START' : null))}
           {bench.length === 0 && (

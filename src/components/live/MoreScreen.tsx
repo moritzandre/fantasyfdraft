@@ -12,27 +12,29 @@ interface Tool {
   href: string;
   title: string;
   blurb: string;
+  /** lv-tool-* hue class (live.css) — colors the card edge + title only */
+  tool: string;
 }
 
 const base = import.meta.env.BASE_URL;
 
 const DRAFT_TOOLS: Tool[] = [
-  { href: '#/ready', title: 'Ready Check', blurb: 'board hash · SW · storage · wake lock' },
-  { href: '#/setup', title: 'Setup', blurb: 'teams · slot · rounds · roster · strategy' },
-  { href: '#/prep', title: 'Prep', blurb: 'tiers · tags · overrides · strategy · rehearsal' },
-  { href: '#/guide', title: 'Guide', blurb: 'how everything works — start here' },
-  { href: '#/sync', title: 'Sleeper Sync', blurb: 'live draft + mock lobbies' },
-  { href: '#/log', title: 'Pick Log', blurb: 'review · edit · catch-up' },
-  { href: '#/review', title: 'Review & History', blurb: 'grade my picks against the engine' },
-  { href: '#/planb', title: 'Plan B', blurb: 'the printed board, on screen' },
-  { href: '#/league', title: 'League', blurb: 'all 12 rosters · live draft grid' },
-  { href: '#/sim', title: 'Sim Lab', blurb: 'strategy sweeps + mock calibration, in-app' },
+  { href: '#/ready', title: 'Ready Check', blurb: 'board hash · SW · storage · wake lock', tool: 'lv-tool-draft' },
+  { href: '#/setup', title: 'Setup', blurb: 'teams · slot · rounds · roster · strategy', tool: 'lv-tool-draft' },
+  { href: '#/prep', title: 'Prep', blurb: 'tiers · tags · overrides · strategy · rehearsal', tool: 'lv-tool-draft' },
+  { href: '#/guide', title: 'Guide', blurb: 'how everything works — start here', tool: 'lv-tool-guide' },
+  { href: '#/sync', title: 'Sleeper Sync', blurb: 'live draft + mock lobbies', tool: 'lv-tool-sync' },
+  { href: '#/log', title: 'Pick Log', blurb: 'review · edit · catch-up', tool: 'lv-tool-draft' },
+  { href: '#/review', title: 'Review & History', blurb: 'grade my picks against the engine', tool: 'lv-tool-draft' },
+  { href: '#/planb', title: 'Plan B', blurb: 'the printed board, on screen', tool: 'lv-tool-draft' },
+  { href: '#/league', title: 'League', blurb: 'all 12 rosters · live draft grid', tool: 'lv-tool-league' },
+  { href: '#/sim', title: 'Sim Lab', blurb: 'strategy sweeps + mock calibration, in-app', tool: 'lv-tool-sim' },
 ];
 
 const SEASON_TOOLS: Tool[] = [
-  { href: base + 'season#/coach', title: 'Lineup Coach', blurb: 'weekly start/sit with reasons' },
-  { href: base + 'season#/waivers', title: 'Waivers', blurb: 'pickup targets ranked by roster need' },
-  { href: base + 'season#/trade', title: 'Trade Desk', blurb: 'sandbox trade evaluator — works with zero sync' },
+  { href: base + 'season#/coach', title: 'Lineup Coach', blurb: 'weekly start/sit with reasons', tool: 'lv-tool-season' },
+  { href: base + 'season#/waivers', title: 'Waivers', blurb: 'pickup targets ranked by roster need', tool: 'lv-tool-season' },
+  { href: base + 'season#/trade', title: 'Trade Desk', blurb: 'sandbox trade evaluator — works with zero sync', tool: 'lv-tool-season' },
 ];
 
 function ToolGrid({ tools }: { tools: Tool[] }) {
@@ -42,9 +44,9 @@ function ToolGrid({ tools }: { tools: Tool[] }) {
         <a
           key={t.href}
           href={t.href}
-          class="flex min-h-14 flex-col justify-center rounded-xl border border-app-border bg-app-surface px-4 py-3"
+          class={`lv-toolcard ${t.tool} flex min-h-14 flex-col justify-center rounded-xl border border-app-border bg-app-surface px-4 py-3`}
         >
-          <span class="font-bold">{t.title}</span>
+          <span class="lv-h-tool font-bold">{t.title}</span>
           <span class="text-sm text-app-dim">{t.blurb}</span>
         </a>
       ))}
@@ -63,12 +65,12 @@ export default function MoreScreen() {
       </header>
 
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Draft tools</h2>
+        <h2 class="lv-h-tool lv-tool-draft text-sm font-semibold uppercase tracking-wide">Draft tools</h2>
         <ToolGrid tools={DRAFT_TOOLS} />
       </section>
 
       <section class="flex flex-col gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-app-dim">Season</h2>
+        <h2 class="lv-h-tool lv-tool-season text-sm font-semibold uppercase tracking-wide">Season</h2>
         <ToolGrid tools={SEASON_TOOLS} />
       </section>
     </main>

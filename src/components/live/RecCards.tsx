@@ -280,7 +280,7 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
           return (
             <button
               type="button"
-              class={`w-full rounded-xl border bg-app-surface p-3 text-left ${
+              class={`lv-tier-${tl.toLowerCase()} w-full rounded-xl border bg-app-surface p-3 text-left ${
                 rec.isTie ? 'border-accent' : 'border-app-border'
               }`}
               onClick={() => setExpanded(expanded === rec.idx ? null : rec.idx)}
@@ -308,10 +308,13 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
                 </span>
               </div>
 
-              <div class="num mt-1 flex items-center gap-3 text-sm text-app-dim">
-                <span>
+              <div class="num mt-1 flex items-center gap-2 text-sm text-app-dim">
+                <span class={`lv-posc lv-posc-${p.pos.toLowerCase()} rounded px-1.5 text-[12px] font-bold`}>
                   {p.pos}
-                  {p.posRank} · {p.team} · bye {p.bye ?? '—'}
+                  {p.posRank}
+                </span>
+                <span>
+                  {p.team} · bye {p.bye ?? '—'}
                 </span>
                 <span>
                   {fmtInt(p.proj?.halfPpr)} pts · p90 {fmtInt(rec.ceiling)}

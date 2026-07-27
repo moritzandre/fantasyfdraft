@@ -563,12 +563,12 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
         >
           ← Hub
         </a>
-        <h1 class="flex-1 text-lg font-bold">Sim Lab</h1>
+        <h1 class="lv-h-tool lv-tool-sim flex-1 text-lg font-bold">Sim Lab</h1>
       </div>
 
       {/* ── A. Strategy sweep ─────────────────────────────────────────── */}
-      <section class="mt-3 rounded-xl border border-app-border bg-app-surface p-3">
-        <h2 class="text-[17px] font-bold">Strategy sweep — browser self-play</h2>
+      <section class="lv-sect lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+        <h2 class="lv-h-tool text-[17px] font-bold">Strategy sweep — browser self-play</h2>
         <p class="pt-1 text-sm text-app-dim">
           The live engine drafts every selected strategy from slot {slot} against the shared
           opponent room — same core, seed and paired Δ-vs-balanced math as the CLI harness.
@@ -629,8 +629,8 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
 
         {run.phase === 'running' && (
           <div class="mt-2">
-            <div class="h-3 overflow-hidden rounded bg-app-bg">
-              <div class="h-3 bg-accent" style={`width:${pct}%`} />
+            <div class="lv-progress">
+              <div class="lv-progress-fill" style={`width:${pct}%`} />
             </div>
             <p class="num pt-1 text-xs text-app-dim">
               {run.draftsDone} / {run.totalDrafts} drafts ({pct}%) · {draftsPerSec.toFixed(1)} drafts/s
@@ -659,8 +659,8 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
       </section>
 
       {/* ── R. Room editor ────────────────────────────────────────────── */}
-      <section class="mt-3 rounded-xl border border-app-border bg-app-surface p-3">
-        <h2 class="text-[17px] font-bold">
+      <section class="lv-sect lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+        <h2 class="lv-h-tool text-[17px] font-bold">
           Room — who you practice against
           {roomLocal && <span class="pl-2 text-xs font-bold text-accent">LOCAL EDITS ACTIVE</span>}
         </h2>
@@ -792,8 +792,8 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
       </section>
 
       {/* ── B. Mock calibration ───────────────────────────────────────── */}
-      <section class="mt-3 rounded-xl border border-app-border bg-app-surface p-3">
-        <h2 class="text-[17px] font-bold">Mock calibration — fit the room to YOUR Sleeper mocks</h2>
+      <section class="lv-sect lv-tool-sim mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+        <h2 class="lv-h-tool text-[17px] font-bold">Mock calibration — fit the room to YOUR Sleeper mocks</h2>
         <p class="pt-1 text-sm text-app-dim">
           Fetches your completed {l.teams}-team Sleeper mock drafts, replays every observed pick
           through the opponent model (teacher-forced, neutral seats) and grid-searches τ ×

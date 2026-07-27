@@ -46,7 +46,9 @@ export default function BoardList({ s, store, board }: { s: DraftState; store: S
             type="button"
             class={`num min-h-14 rounded-lg border px-3 text-[15px] font-semibold ${
               s.ui.posFilter === c
-                ? 'border-accent bg-accent text-app-bg'
+                ? c === 'ALL' || c === 'TARGETS'
+                  ? 'border-accent bg-accent text-app-bg'
+                  : `lv-posc lv-posc-${c.toLowerCase()} border-transparent`
                 : 'border-app-border bg-app-surface text-app-text'
             }`}
             onClick={() => dispatch({ type: 'SET_UI', ui: { posFilter: c } })}
@@ -80,7 +82,7 @@ export default function BoardList({ s, store, board }: { s: DraftState; store: S
                 {abbrevName(p.name, 18)}
                 {isTarget(p) && <span class="ml-1 text-accent">★</span>}
               </span>
-              <span class={`lv-pos-${p.pos.toLowerCase()} num w-9 shrink-0 pb-0.5 text-center text-[13px] font-bold`}>
+              <span class={`lv-posc lv-posc-${p.pos.toLowerCase()} num w-9 shrink-0 rounded text-center text-[12px] font-bold`}>
                 {p.pos}
                 {p.posRank}
               </span>
