@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "test": "node --test \"engine/**/*.test.js\"",
+    "test:tools": "node --test \"tools/**/*.test.mjs\"",
     "board": "python tools/build_board.py && python tools/verify_board.py && node tools/simulate.mjs",
     "pdfs": "python tools/make_pdfs.py"
   },

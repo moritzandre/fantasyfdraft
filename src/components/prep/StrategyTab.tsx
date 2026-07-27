@@ -45,6 +45,24 @@ export default function StrategyTab({ ctx }: { ctx: PrepCtx }) {
   }, []);
   const allStrategies = { ...STRATEGIES, ...(registry ?? {}) };
 
+  // Self-play evaluation results (tools/evaluate_strategies.mjs →
+  // public/data/evaluation.json). Hidden entirely when the file is absent
+  // or was computed against a different board build (stale numbers would be
+  // worse than none).
+  const [evalData, setEvalData] = useState<any | null>(null);
+  useEffect(() => {
+    fetch((import.meta as any).env.BASE_URL + 'data/evaluation.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d.buildHash === ctx.board.buildHash) setEvalData(d);
+      })
+      .catch(() => {});
+  }, []);
+  const evalCell = (name: string): any | null =>
+    evalData?.cells?.[String(l.slot)]?.[name] ?? null;
+  const evalPaired = (name: string): any | null =>
+    evalData?.pairedVsBalanced?.[String(l.slot)]?.[name] ?? null;
+
   const choose = (name: string) => {
     update((p) => setStrategy(p, name));
     store.dispatch({ type: 'SET_LEAGUE', league: { strategy: name } });
@@ -112,6 +130,28 @@ export default function StrategyTab({ ctx }: { ctx: PrepCtx }) {
                   </span>
                 )}
               </button>
+
+              {evalCell(strat.name) && (
+                <div class="num flex flex-wrap gap-x-4 gap-y-1 px-3 pb-2 text-xs text-app-dim">
+                  <span>
+                    sim slot {l.slot} ({evalData.sims} drafts):{' '}
+                    <b class="text-app-text">{fmt1(evalCell(strat.name).rosterValue.mean)}</b> mean
+                  </span>
+                  <span>
+                    p10 {fmt1(evalCell(strat.name).rosterValue.p10)} · p90{' '}
+                    {fmt1(evalCell(strat.name).rosterValue.p90)}
+                  </span>
+                  {evalPaired(strat.name) && (
+                    <span>
+                      Δ vs balanced {evalPaired(strat.name).meanDiff >= 0 ? '+' : ''}
+                      {fmt1(evalPaired(strat.name).meanDiff)} ±{fmt1(2 * evalPaired(strat.name).se)}
+                      {Math.abs(evalPaired(strat.name).meanDiff) < 2 * evalPaired(strat.name).se
+                        ? ' ≈ noise'
+                        : ''}
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div class="overflow-x-auto px-3 pb-2">
                 <table class="num w-full border-collapse text-center text-sm">

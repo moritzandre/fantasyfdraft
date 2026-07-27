@@ -300,3 +300,21 @@ test('includeIdxs force-scores through the same pipeline; shortlist untouched', 
   assert.ok(ex.score <= res.recommendations[0].score, 'a filtered-out player cannot outscore the top rec');
   assert.deepEqual(base.scoredExtras, []);
 });
+
+test('slack rule never empties the shortlist when only K/DST starters remain', () => {
+  const board = synthBoard();
+  // My roster: all 8 skill starters filled by rounds 1-13 (QB,2RB,2WR,TE,2FLEX
+  // + bench), K/DST still open, cursor at my round-14 pick (158 at slot 8).
+  // 3 picks left (158, 167, 176... slot 8 picks: R14=158? compute via ladder)
+  // Build entries: my picks at rounds 1..13 take skill players; everyone else
+  // fills from the bottom of the board.
+  const myNs = [8, 17, 32, 41, 56, 65, 80, 89, 104, 113, 128, 137, 152];
+  const skill = board.players.filter((p) => ['QB', 'RB', 'WR', 'TE'].includes(p.pos));
+  const entries = myNs.map((n, i) => ({ n, idx: skill[i].idx }));
+  const res = recommend(board, LEAGUE, { entries, cursor: 158 }, {});
+  assert.equal(res.diagnostics.round, 14);
+  assert.ok(res.recommendations.length > 0, 'shortlist must not be empty at the free round-14 pick');
+  for (const rec of res.recommendations) {
+    assert.ok(!['K', 'DST'].includes(board.players[rec.idx].pos), 'still no K/DST before R15');
+  }
+});

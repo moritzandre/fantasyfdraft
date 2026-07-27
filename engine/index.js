@@ -258,10 +258,15 @@ export function recommend(board, league, state, opts = {}) {
       if ((myCounts[pos] ?? 0) < (S[pos] ?? 0)) candidates.push(...(poolByPos[pos] ?? []).slice(0, 3));
     }
   } else {
+    // The slack restriction can only bind on positions the optimizer offers:
+    // when the sole unfilled starters are K/DST (hard-scheduled, not
+    // candidates before R15) the restriction would empty the shortlist —
+    // that pick is genuinely free, so it stays unrestricted.
+    const optimizedNeed = OPTIMIZED.some((pos) => needPos.has(pos));
     candidates = pool
       .filter((p) => OPTIMIZED.includes(p.pos))
       .filter((p) => !(round <= 3 && p.pos === 'RB' && (p.proj?.rec ?? 0) < 45)) // hard rule 2
-      .filter((p) => slack > 1 || needPos.has(p.pos)) // hard scarcity rule
+      .filter((p) => slack > 1 || !optimizedNeed || needPos.has(p.pos)) // hard scarcity rule
       .sort((a, b) => b.eff - a.eff)
       .slice(0, candidateLimit);
   }

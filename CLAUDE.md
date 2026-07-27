@@ -27,11 +27,15 @@ Astro is pinned to 5.x: `@vite-pwa/astro` peer-caps at 5; the PWA plugin is load
 npm test                       # engine tests (node --test)
 node --test "src/state/*.test.ts"   # state layer (Node strip-types; TS must stay ERASABLE)
 node --test "src/sync/*.test.ts"
+npm run test:tools             # evaluation + calibration harness tests (tools/**/*.test.mjs)
 npm run dev                    # dev server :4321
 python tools/serve.py          # serve BUILT docs/ at the base path :8788 (root-serving breaks assets)
 npm run board                  # data refresh: build_board → verify_board → simulate
 npm run build                  # build into docs/ (commit it — that IS the deploy)
 python tools/make_pdfs.py --preset full --paper a4 --mode gray [--slot N]
+node tools/evaluate_strategies.mjs --slots 8 --workers 12        # self-play strategy sweep → evaluation.json
+python tools/fetch_mocks.py --user <name>                        # download my Sleeper mock drafts
+node tools/calibrate.mjs --grid [--apply]                        # fit opponent params from real mocks
 ```
 
 **Full data-refresh order** (hash-mismatch banners flag any skipped step):
@@ -81,13 +85,46 @@ commit docs/ + push → `make_pdfs.py`.
 - DST weekly projections have no bye-week zero (flag `dstByeZeroed`); 5 players carry `weeklySynthesized`.
 - `verify_board.py` REWRITES board.json (adds checks) — always run it after build_board.
 
+## Hub expansion (landed 2026-07-27; plan: ~/.claude/plans/okay-looks-good-i-twinkling-flask.md)
+
+- **Contexts & profiles**: every draft state lives in a (profile, mode) CONTEXT —
+  `persist.ts snapshotKey(ctx)`; default profile + real mode = the legacy keys (zero migration).
+  `src/state/profiles.ts` (dp:profiles:v1) + `mode.ts` (dp:mode:v1 real/practice). Practice mode
+  is a fully isolated namespace — mock drafting can NEVER touch real prep. Hub (#/hub, default
+  route) switches leagues/modes/tools.
+- **One opponent model**: `engine/opponent.js` (extracted from simulate.mjs, bit-identical golden
+  gate — see the note in that file's header). Seats draw per-draft strategy ARCHETYPES from
+  `opponents.json archetypes.mix` (names = built-ins + strategies.json); mix absent ⇒ exact
+  legacy behavior. simulate.mjs, mock driver (src/state/mock.ts), RehearsalTab, evaluation and
+  calibration all share it.
+- **Custom strategies**: `public/data/strategies.json`, validated by
+  `engine/strategy.js validateStrategy` (whitelist = multipliers/constraints/overrideDelta only —
+  the structural no-additive-terms guard). `resolveStrategy(name, registry)`; unknown names still
+  throw; boot guard reverts visibly to balanced.
+- **recommend() extensions**: n-aware `state.entries [{n,idx}]` + `state.cursor` (holes safe —
+  ALWAYS pass these from UI code, never the dense array), `opts.strategies`,
+  `opts.includeIdxs → scoredExtras` (ReviewScreen grading).
+- **New routes**: #/hub · #/league (rosters + live draft grid) · #/review. Practice #/live gets
+  the MockControls strip; SyncPanel practice section joins real Sleeper MOCK lobbies
+  (sleeperMock.ts; off-board picks: `onUnresolvable:'skip'` — real mode stays 'pause').
+- **Evaluation**: `tools/evaluate_strategies.mjs` — self-play sweeps (my seat = real engine),
+  paired vs balanced with common random numbers (draftSeed excludes the strategy name — forced
+  picks consume no rng), worker_threads + file-shard merge. Results render in StrategyTab when
+  evaluation.json matches the buildHash.
+- **Calibration**: fetch_mocks.py → calibrate.mjs (teacher-forced LL, pAvail reliability,
+  held-one-out grid) → opponents.json `params` → re-run simulate.mjs.
+- Post-draft (planned, not started): season platform — build_week.py + season.json, per-profile
+  season stores, lineup coach, waivers, sandbox-first Trade Desk. See the plan file.
+
 ## Current status (2026-07-27) & open items
 
-Done: pipeline (7/7 checks), engine (55 tests), state (66), sync (6), live app + prep mode + Ladder,
-MC (12-slot branch trees), all 14 print sheets, Sleeper sync. All committed and pushed.
+Done: pipeline (7/7), engine (86 tests), state (84), sync (20), tools (9), live app + prep +
+Ladder + hub/practice/league views/mock mode, MC w/ archetypes, 14 print sheets, Sleeper sync
+incl. mock lobbies. All committed.
 
-Open — **user-side**: enable GitHub Pages (Settings→Pages: main /docs — still 404 last checked);
-iPad Add-to-Home-Screen + airplane-mode cold-launch proof (Phase 3 gate); print legibility proof on
-his A4 B&W laser; Sleeper draft ID near draft day.
-Open — **schedule**: fresh data rebuild Fri 21 Aug (T−3); full airplane-mode mock draft Sat 22 (T−2);
-**hard freeze Sun 23 Aug — no pushes after**; draft Mon 24 Aug 17:30 CEST.
+Open — **user-side**: run 1–2 Sleeper mocks per session NOW (≥10 by ~Aug 12 → fetch_mocks +
+calibrate); author candidate strategies in strategies.json + run sweeps; enable GitHub Pages
+(Settings→Pages: main /docs — still 404 last checked); iPad Add-to-Home-Screen + airplane-mode
+cold-launch proof incl. new routes; print legibility proof; Sleeper draft ID near draft day.
+Open — **schedule**: fresh data rebuild Fri 21 Aug (T−3, then re-run sweeps); full airplane-mode
+mock draft Sat 22 (T−2); **hard freeze Sun 23 Aug — no pushes after**; draft Mon 24 Aug 17:30 CEST.
