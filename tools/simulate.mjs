@@ -25,26 +25,12 @@
 // Same seed ⇒ byte-identical mc.json modulo the two provenance fields
 // (generatedAt, meta.wallTimeMs) — verified by diffing two runs.
 //
-// Opponent model (plan "Leaguemate tendency profiles"), per seat from
-// public/data/opponents.json — ALL 12 seats are simulated (slot-general;
-// there is no "me" in the offline pass):
-//   • Picks are sampled Plackett-Luce: w_i = exp(−(μ_i − μ_min)/τ) over the
-//     top-40 remaining by ADP — the SAME weight formula the live survival
-//     model uses (engine/mc.js plWeights ≡ survival.js plackettLuceSurvival).
-//   • τ = τ_local (mean adp.sigmaFinal of the top-24 window, exactly the
-//     live engine's τ̂) × exp(2·(0.5 − adpDiscipline)) — discipline 0 (wild
-//     reacher) ⇒ ×e ≈ 2.7 hotter, discipline 1 (strict ADP) ⇒ ×0.37 —
-//     × a per-draft lognormal jitter exp(0.20·z) × 1.5 in reachRounds.
-//   • positionBias multiplies w for that position; homerTeams boost ×1.2.
-//   • ~30% of seats per draft are need-aware: while they still have unfilled
-//     QB/RB/WR/TE starter slots (dedicated or flex), they mask every other
-//     position; once skill starters are full the mask lifts (bench mode).
-//     K/DST are never part of the mask — they resolve via ADP + the rule
-//     below.
-//   • Realism rails: nobody drafts a 2nd K/DST or a 4th QB/TE (caps
-//     QB 3 / TE 3 / K 1 / DST 1); in the last two rounds a seat still
-//     missing K or DST picks among the missing K/DST (mirrors the engine's
-//     myPicks(league).slice(-2) hard-scheduling).
+// Opponent model: engine/opponent.js (ONE shared model — the Monte Carlo,
+// the in-app mock-draft driver and the evaluation harness all sample from
+// the same code; see that file's header for the math). Per-seat tendencies
+// and the optional archetype mix come from public/data/opponents.json;
+// archetype names resolve against the built-in strategies plus
+// public/data/strategies.json.
 //
 // Output size: byPick.pAvail is sparse (p > 0.02 only, 3 decimals). If the
 // serialized file exceeds 2 MB, pAvail is pruned to the top-200 players per
@@ -55,28 +41,23 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { tierize } from '../engine/tiers.js';
 import { recommend } from '../engine/index.js';
-import { pickNumber, slotForPick } from '../engine/picks.js';
+import { pickNumber } from '../engine/picks.js';
 import {
-  xorshift128plus, normal, signatureOf, signatureKey, parseSignature,
+  xorshift128plus, signatureOf, signatureKey, parseSignature,
   signatureDistance, kMedoids,
 } from '../engine/mc.js';
+import { makeOpponentCtx, makeDraftSim } from '../engine/opponent.js';
+import { defineStrategy } from '../engine/strategy.js';
 import { validateBoard } from '../shared/schema.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BOARD_PATH = path.join(ROOT, 'public', 'data', 'board.json');
 const OPP_PATH = path.join(ROOT, 'public', 'data', 'opponents.json');
+const STRAT_PATH = path.join(ROOT, 'public', 'data', 'strategies.json');
 const LEAGUE_PATH = path.join(ROOT, 'config', 'league.json');
 const MC_PATH = path.join(ROOT, 'public', 'data', 'mc.json');
 
 const POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
-const POS_IDX = Object.fromEntries(POS.map((p, i) => [p, i]));
-const CAPS = { QB: 3, RB: 9, WR: 9, TE: 3, K: 1, DST: 1 }; // realism rails
-const WINDOW = 40;        // Plackett-Luce candidate window (top-N by ADP)
-const TAU_WINDOW = 24;    // τ_local window — matches the live engine
-const HOMER_BOOST = 1.2;
-const REACH_TAU = 1.5;
-const JITTER_SD = 0.20;
-const NEED_AWARE_SHARE = 0.30;
 const MAX_CLUSTER_ITEMS = 400; // unique-signature cap fed to k-medoids
 const SIZE_BUDGET = 2 * 1024 * 1024;
 
@@ -205,210 +186,9 @@ function retier(board) {
 }
 
 // ══ Phase B/C machinery — the draft simulator ══════════════════════════════
-
-/** Precompute everything the hot loop touches into flat typed arrays. */
-function makeCtx(board, league, opponents) {
-  const players = board.players;
-  const n = players.length;
-  const mu = new Float64Array(n);
-  const sigmaFinal = new Float64Array(n);
-  const eff = new Float64Array(n);
-  const posInt = new Uint8Array(n);
-  for (const p of players) {
-    mu[p.idx] = p.adp.mu;
-    sigmaFinal[p.idx] = p.adp.sigmaFinal;
-    eff[p.idx] = p.eff;
-    posInt[p.idx] = POS_IDX[p.pos];
-  }
-  // idx IS ADP order (build_board sorts by μ asc) — asserted, the window
-  // scan depends on it.
-  for (let i = 1; i < n; i++) {
-    if (mu[i] < mu[i - 1] - 1e-9) throw new Error('players not in ADP order — window scan invalid');
-  }
-  // eff-descending order per position (best-available pointers)
-  const posOrderEff = POS.map((_, pi) => {
-    const list = [];
-    for (let i = 0; i < n; i++) if (posInt[i] === pi) list.push(i);
-    list.sort((a, b) => eff[b] - eff[a] || a - b);
-    return Int32Array.from(list);
-  });
-  // μ-ascending order per position (forced K/DST completion)
-  const posOrderMu = POS.map((_, pi) => {
-    const list = [];
-    for (let i = 0; i < n; i++) if (posInt[i] === pi) list.push(i);
-    return Int32Array.from(list); // idx order = μ order
-  });
-
-  // Per-seat model from opponents.json (seat 1..12; [0] unused).
-  const N = league.teams;
-  const discFactor = new Float64Array(N + 1).fill(1);
-  const reachRounds = Array.from({ length: N + 1 }, () => new Set());
-  const seatBoost = Array.from({ length: N + 1 }, () => new Float64Array(n).fill(1));
-  for (const seat of opponents.seats ?? []) {
-    const s = seat.seat;
-    if (!(s >= 1 && s <= N)) continue;
-    const d = Math.min(1, Math.max(0, seat.adpDiscipline ?? 0.5));
-    discFactor[s] = Math.exp(2 * (0.5 - d)); // wild ⇒ hot τ, strict ⇒ cold τ
-    for (const r of seat.reachRounds ?? []) reachRounds[s].add(r);
-    const bias = seat.positionBias ?? {};
-    const homers = new Set(seat.homerTeams ?? []);
-    for (const p of players) {
-      let b = bias[p.pos] ?? 1;
-      if (homers.has(p.team)) b *= HOMER_BOOST;
-      if (b !== 1) seatBoost[s][p.idx] = b;
-    }
-  }
-
-  const S = league.roster;
-  const flexElig = new Set(league.flexEligible);
-  const capsInt = POS.map((p) => CAPS[p]);
-  const rosterCapInt = POS.map((p) => S[p] ?? 0);
-  const skillMaskable = POS.map((p) => ['QB', 'RB', 'WR', 'TE'].includes(p));
-  const flexEligInt = POS.map((p) => flexElig.has(p));
-
-  return {
-    players, n, mu, sigmaFinal, eff, posInt, posOrderEff, posOrderMu,
-    discFactor, reachRounds, seatBoost,
-    N, rounds: league.rounds, totalPicks: N * league.rounds,
-    S, capsInt, rosterCapInt, skillMaskable, flexEligInt,
-    flexSlots: S.FLEX ?? 0,
-    kIdx: POS_IDX.K, dstIdx: POS_IDX.DST,
-  };
-}
-
-/** Mutable draft state + the sampling core. One instance, reset per sim. */
-function makeSim(ctx) {
-  const { n, N } = ctx;
-  const taken = new Uint8Array(n);
-  const counts = new Int32Array((N + 1) * 6);
-  const draftedAt = new Uint8Array(n);
-  const jitter = new Float64Array(N + 1);
-  const needAware = new Uint8Array(N + 1);
-  const cand = new Int32Array(WINDOW + 8);
-  const candW = new Float64Array(WINDOW + 8);
-  let front = 0;
-
-  function reset() {
-    taken.fill(0); counts.fill(0); draftedAt.fill(0); front = 0;
-  }
-
-  /** Draw the per-draft seat randomness (τ jitter + need-aware flags). */
-  function drawSeatState(rng) {
-    for (let s = 1; s <= N; s++) jitter[s] = Math.exp(JITTER_SD * normal(rng));
-    for (let s = 1; s <= N; s++) needAware[s] = rng.next() < NEED_AWARE_SHARE ? 1 : 0;
-  }
-
-  /** Force-apply a fixed pick prefix (picks 1..prefix.length). */
-  function applyPicks(prefix) {
-    for (let k = 0; k < prefix.length; k++) {
-      const idx = prefix[k];
-      taken[idx] = 1;
-      draftedAt[idx] = k + 1;
-      counts[slotForPick(k + 1, N, true) * 6 + ctx.posInt[idx]]++;
-    }
-  }
-
-  /** Need-aware skill mask: bitmask over QB/RB/WR/TE the seat still needs as
-      a starter (dedicated or flex); 0 ⇒ no mask (bench mode). */
-  function skillNeedMask(seat) {
-    let mask = 0;
-    let surplus = 0;
-    for (let pi = 0; pi < 6; pi++) {
-      if (!ctx.skillMaskable[pi]) continue;
-      const have = counts[seat * 6 + pi];
-      const cap = ctx.rosterCapInt[pi];
-      if (have < cap) mask |= 1 << pi;
-      if (ctx.flexEligInt[pi] && have > cap) surplus += have - cap;
-    }
-    if (ctx.flexSlots - Math.min(ctx.flexSlots, surplus) > 0) {
-      for (let pi = 0; pi < 6; pi++) {
-        if (ctx.flexEligInt[pi]) mask |= 1 << pi;
-      }
-    }
-    return mask;
-  }
-
-  /** Sample one pick for `seat` in `round`. Returns the player idx. */
-  function samplePick(seat, round, rng) {
-    while (front < n && taken[front]) front++;
-
-    let m = 0;
-    let tauSum = 0, tauN = 0;
-
-    // Last two rounds: a seat still missing K or DST fills it (mirrors the
-    // engine's myPicks(league).slice(-2) hard-scheduling).
-    if (round >= ctx.rounds - 1) {
-      for (const pi of [ctx.kIdx, ctx.dstIdx]) {
-        if (counts[seat * 6 + pi] < ctx.rosterCapInt[pi]) {
-          const order = ctx.posOrderMu[pi];
-          let got = 0;
-          for (let j = 0; j < order.length && got < 4; j++) {
-            if (!taken[order[j]]) { cand[m++] = order[j]; got++; }
-          }
-        }
-      }
-      if (m > 0) {
-        for (let j = 0; j < m; j++) { tauSum += ctx.sigmaFinal[cand[j]]; tauN++; }
-        return softmax(seat, round, m, tauSum / tauN, rng);
-      }
-    }
-
-    const mask = needAware[seat] ? skillNeedMask(seat) : 0;
-    for (let pass = 0; pass < 2 && m === 0; pass++) {
-      const useMask = pass === 0 ? mask : 0; // masked window empty ⇒ drop mask
-      m = 0; tauSum = 0; tauN = 0;
-      for (let i = front; i < n && m < WINDOW; i++) {
-        if (taken[i]) continue;
-        const pi = ctx.posInt[i];
-        if (counts[seat * 6 + pi] >= ctx.capsInt[pi]) continue;
-        if (useMask !== 0 && !(useMask & (1 << pi))) continue;
-        cand[m++] = i;
-        if (tauN < TAU_WINDOW) { tauSum += ctx.sigmaFinal[i]; tauN++; }
-      }
-    }
-    if (m === 0) { // caps exhausted the window (pathological) — take next free
-      for (let i = front; i < n; i++) if (!taken[i]) return i;
-      throw new Error('pool exhausted');
-    }
-    return softmax(seat, round, m, tauSum / Math.max(1, tauN), rng);
-  }
-
-  /** Plackett-Luce draw over cand[0..m): w = exp(−Δμ/τ)·bias. */
-  function softmax(seat, round, m, tauLocal, rng) {
-    let tau = Math.max(0.5, tauLocal) * ctx.discFactor[seat] * jitter[seat];
-    if (ctx.reachRounds[seat].has(round)) tau *= REACH_TAU;
-    const boost = ctx.seatBoost[seat];
-    const mu0 = ctx.mu[cand[0]]; // candidates are μ-ascending
-    let W = 0;
-    for (let j = 0; j < m; j++) {
-      const w = Math.exp(-(ctx.mu[cand[j]] - mu0) / tau) * boost[cand[j]];
-      candW[j] = w; W += w;
-    }
-    let u = rng.next() * W;
-    for (let j = 0; j < m; j++) {
-      u -= candW[j];
-      if (u <= 0) return cand[j];
-    }
-    return cand[m - 1];
-  }
-
-  /** Run picks pFrom..pTo inclusive. onPick(p) fires BEFORE the pick is
-      sampled; record (if given) receives each sampled idx. */
-  function run(pFrom, pTo, rng, { onPick = null, record = null } = {}) {
-    for (let p = pFrom; p <= pTo; p++) {
-      if (onPick) onPick(p);
-      const seat = slotForPick(p, N, true);
-      const round = Math.ceil(p / N);
-      const idx = samplePick(seat, round, rng);
-      taken[idx] = 1;
-      draftedAt[idx] = Math.min(p, 255);
-      counts[seat * 6 + ctx.posInt[idx]]++;
-      if (record) record.push(idx);
-    }
-  }
-
-  return { taken, counts, draftedAt, reset, drawSeatState, applyPicks, run };
-}
+// Extracted to engine/opponent.js (makeOpponentCtx + makeDraftSim) so the
+// mock-draft driver and the evaluation harness sample from the SAME model.
+// Same seed + default params + no archetype mix ⇒ bit-identical mc.json.
 
 // ══ Main ═══════════════════════════════════════════════════════════════════
 
@@ -431,9 +211,30 @@ log(`[tiers] real Ckmeans tiers written (${board.tiers.length} tiers): `
 for (const note of notes) log(`[tiers] NOTE: ${note}`);
 
 // ── Phase B: main Monte Carlo ──────────────────────────────────────────────
-const ctx = makeCtx(board, league, opponents);
+// Custom strategies feed the archetype mix (opponents.json archetypes.mix).
+// A missing strategies.json is fine (built-ins only); an INVALID spec is
+// fatal — bad data must never silently alter mc.json.
+let strategiesReg = null;
+try {
+  const rawStrats = JSON.parse(readFileSync(STRAT_PATH, 'utf8'));
+  strategiesReg = {};
+  for (const spec of rawStrats.strategies ?? []) {
+    const s = defineStrategy(spec);
+    strategiesReg[s.name] = s;
+  }
+} catch (e) {
+  if (e.code !== 'ENOENT') throw e;
+}
+
+const ctx = makeOpponentCtx(board, league, opponents, { strategies: strategiesReg });
 const { n, N, totalPicks, players } = ctx;
-const sim = makeSim(ctx);
+const sim = makeDraftSim(ctx);
+if (ctx.archCdf) {
+  const mixDesc = Object.entries(opponents.archetypes.mix)
+    .map(([k, v]) => `${k} ${v}`).join(', ');
+  notes.push(`opponent archetypes active — per-draft seat strategies drawn from mix: ${mixDesc}`);
+  log(`[mc] archetypes: ${mixDesc}`);
+}
 const rng = xorshift128plus(SEED);
 
 const BINS = 400;

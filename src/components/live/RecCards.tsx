@@ -86,10 +86,17 @@ export default function RecCards({ s, store, board }: { s: DraftState; store: St
     if (s.picks.length >= total) return { done: true } as any;
     let result: any;
     try {
+      // n-aware entries + cursor: log holes (EDIT_PICK deletes, cursor
+      // skips, off-board sync picks) keep every pick attributed to the
+      // right team — the dense form misassigned everything after a hole.
       result = recommend(
         board,
         s.league,
-        { picks: s.picks.map((p) => p.n <= total ? p.idx : -1).filter((i) => i >= 0), strategy: s.league.strategy },
+        {
+          entries: s.picks.filter((p) => p.n <= total).map((p) => ({ n: p.n, idx: p.idx })),
+          cursor: s.pickCursor,
+          strategy: s.league.strategy,
+        },
         {},
       );
     } catch (e: any) {

@@ -13,8 +13,31 @@
       "positionBias:  multiplicative pos weights, e.g. {\"RB\": 1.2} for a",
       "               known RB-heavy drafter. {} = neutral.",
       "homerTeams:    NFL team codes they overdraft, e.g. [\"DAL\"].",
-      "reachRounds:   rounds where they historically reach, e.g. [1, 2]."
+      "reachRounds:   rounds where they historically reach, e.g. [1, 2].",
+      "",
+      "archetypes.mix: per-DRAFT seat strategies. Each simulated draft, every",
+      "               seat independently draws one archetype from this",
+      "               weighted mix (weights are normalized). Names resolve to",
+      "               built-in strategies or public/data/strategies.json",
+      "               specs; the archetype's multipliers tilt that seat's",
+      "               pick sampling and its constraints act as soft masks",
+      "               (e.g. a zero_rb seat avoids RB in R1-3). Delete the",
+      "               block (or set mix to null) to disable — behavior then",
+      "               reverts exactly to the tendency-only model.",
+      "params:        optional global overrides for the sampler (tauScale,",
+      "               discSpread, window, tauWindow, needAwareShare,",
+      "               jitterSd, homerBoost, reachTau, caps). Calibration",
+      "               (tools/calibrate.mjs) writes its fitted values here."
     ]
+  },
+  "archetypes": {
+    "mix": {
+      "balanced": 0.55,
+      "robust_rb": 0.15,
+      "wr_heavy": 0.1,
+      "zero_rb_mod": 0.1,
+      "elite_te": 0.1
+    }
   },
   "seats": [
     { "seat": 1,  "name": "", "adpDiscipline": 0.5, "positionBias": {}, "homerTeams": [], "reachRounds": [] },

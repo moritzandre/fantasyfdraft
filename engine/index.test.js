@@ -243,3 +243,60 @@ test('recommend() is slot-general: turn slot 1 works end-to-end', () => {
   assert.equal(r2.diagnostics.round, 2);
   assert.equal(r2.diagnostics.kappa, 1.0);
 });
+
+// ── Sparse replay (entries/cursor) + force-scored extras ────────────────────
+
+test('dense picks ≡ sparse entries when the log has no holes', () => {
+  const board = synthBoard();
+  const picks = board.players.slice(0, 20).map((p) => p.idx);
+  const dense = recommend(board, LEAGUE, { picks }, {});
+  const sparse = recommend(board, LEAGUE, {
+    entries: picks.map((idx, k) => ({ n: k + 1, idx })),
+    cursor: 21,
+  }, {});
+  assert.deepEqual(sparse.recommendations, dense.recommendations);
+  assert.deepEqual(sparse.diagnostics, dense.diagnostics);
+  assert.deepEqual(sparse.replacementIndices, dense.replacementIndices);
+  assert.equal(sparse.slack, dense.slack);
+  assert.deepEqual(sparse.runFlags, dense.runFlags);
+});
+
+test('entries attribute picks by n — a hole never shifts later picks', () => {
+  const board = synthBoard();
+  const qb = idxOf(board, 'QB', 0);
+  // Same player recorded as MY pick (n=8, slot 8) vs the seat before me
+  // (n=7, slot 7), both with a hole at n=2 and the cursor at 10. Only the
+  // n=8 version fills one of MY starter slots.
+  const mine = recommend(board, LEAGUE, {
+    entries: [{ n: 8, idx: qb }, { n: 2, idx: null }], cursor: 10,
+  }, {});
+  const theirs = recommend(board, LEAGUE, {
+    entries: [{ n: 7, idx: qb }, { n: 2, idx: null }], cursor: 10,
+  }, {});
+  assert.equal(mine.slack, theirs.slack + 1);
+});
+
+test('cursor drives currentPick/round/myNextPick', () => {
+  const board = synthBoard();
+  const res = recommend(board, LEAGUE, { entries: [], cursor: 17 }, {});
+  assert.equal(res.diagnostics.currentPick, 17);
+  assert.equal(res.diagnostics.round, 2);
+  assert.equal(res.diagnostics.onClock, true);   // pick 17 is slot 8''s R2 pick
+  assert.equal(res.diagnostics.myNextPick, 32);  // the rung after 17
+});
+
+test('includeIdxs force-scores through the same pipeline; shortlist untouched', () => {
+  const board = synthBoard();
+  const picks = board.players.slice(0, 7).map((p) => p.idx);
+  const te3 = idxOf(board, 'TE', 3); // far outside the shortlist at pick 8
+  const base = recommend(board, LEAGUE, { picks }, {});
+  const res = recommend(board, LEAGUE, { picks }, { includeIdxs: [te3, picks[0]] });
+  assert.deepEqual(res.recommendations, base.recommendations);
+  assert.equal(res.scoredExtras.length, 1);       // picks[0] is taken — skipped
+  const ex = res.scoredExtras[0];
+  assert.equal(ex.idx, te3);
+  assert.equal(ex.forced, true);
+  assert.ok(Math.abs(termsSum(ex.terms) - ex.score) < 1e-9, 'extras terms must sum to score');
+  assert.ok(ex.score <= res.recommendations[0].score, 'a filtered-out player cannot outscore the top rec');
+  assert.deepEqual(base.scoredExtras, []);
+});

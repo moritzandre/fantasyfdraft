@@ -53,7 +53,7 @@ import { bestLineup, marginalValue } from './lineup.js';
 import { tierize } from './tiers.js';
 import { conditionedSurvival, tierSurvivalStats, orderedBestAvailExpectation } from './survival.js';
 import { positionShares, detectRuns, shiftedMu } from './runs.js';
-import { getStrategy, multiplierFor, isCompliant } from './strategy.js';
+import { resolveStrategy, multiplierFor, isCompliant } from './strategy.js';
 
 const OPTIMIZED = ['QB', 'RB', 'WR', 'TE'];
 const HARD_SCHEDULED = ['K', 'DST'];
@@ -105,10 +105,22 @@ function headline(rec, p, Pnext, compliant) {
  * @param {object} board  board.json shape (see shared/schema.js). tiers on
  *        players are used if present, else computed once per call.
  * @param {object} league  config/league.json shape.
- * @param {{picks: number[], strategy?: string}} state  picks[k] = board idx
- *        taken at overall pick k+1 (append-only log, replayed here).
+ * @param {{picks?: number[], entries?: Array<{n: number, idx: number|null}>,
+ *          cursor?: number, strategy?: string}} state  Either the dense form
+ *        (picks[k] = board idx taken at overall pick k+1) or the n-aware
+ *        form: entries carry explicit overall pick numbers (the store's
+ *        PickEntry shape) and stay correct under log holes (EDIT_PICK
+ *        deletions, cursor skips, off-board sync picks); entries with a
+ *        null/negative idx are ignored. cursor overrides the current
+ *        overall pick (pass the store's pickCursor with entries).
  * @param {{candidateLimit?: number, stackBonus?: number, epsilon?: number,
+ *          strategies?: Object<string, object>|null, includeIdxs?: number[],
  *          now?: () => number}} [opts]  now: injected clock for computeMs.
+ *        strategies: registry of defineStrategy() outputs (custom strategies
+ *        from strategies.json) consulted after the built-ins.
+ *        includeIdxs: pool players to force-score through the identical
+ *        pipeline even when the candidate filters exclude them — returned
+ *        in scoredExtras, the shortlist is untouched.
  */
 export function recommend(board, league, state, opts = {}) {
   const t0 = opts.now ? opts.now() : null;
@@ -124,13 +136,21 @@ export function recommend(board, league, state, opts = {}) {
   const players = board.players;
 
   // ── Replay the pick log ──────────────────────────────────────────────────
-  const taken = new Set(state.picks);
-  const currentPick = state.picks.length + 1;
+  // Dense picks (position ⇒ pick number) or n-aware entries; with no holes
+  // the two are exactly equivalent (regression-tested).
+  const entries = state.entries ?? state.picks.map((idx, k) => ({ n: k + 1, idx }));
+  const taken = new Set();
+  for (const e of entries) if (e.idx != null && e.idx >= 0) taken.add(e.idx);
+  let currentPick;
+  if (state.cursor != null) currentPick = state.cursor;
+  else if (state.entries) currentPick = entries.reduce((a, e) => Math.max(a, e.n), 0) + 1;
+  else currentPick = state.picks.length + 1;
   const round = roundForPick(currentPick, N);
   const rosters = Array.from({ length: N + 1 }, () => []);
-  state.picks.forEach((idx, k) => {
-    rosters[slotForPick(k + 1, N, league.snake)].push(players[idx]);
-  });
+  for (const e of entries) {
+    if (e.idx == null || e.idx < 0) continue;
+    rosters[slotForPick(e.n, N, league.snake)].push(players[e.idx]);
+  }
   const myRoster = rosters[league.slot];
   const myCounts = countByPos(myRoster);
 
@@ -197,7 +217,11 @@ export function recommend(board, league, state, opts = {}) {
     ? window.reduce((a, p) => a + p.adp.sigmaFinal, 0) / window.length
     : 1;
   const shares = positionShares(pool.map((p) => ({ pos: p.pos, mu: p.adp.mu })), tau);
-  const recent = state.picks.slice(-12).map((idx) => players[idx].pos);
+  const recent = entries
+    .filter((e) => e.idx != null && e.idx >= 0)
+    .sort((a, b) => a.n - b.n)
+    .slice(-12)
+    .map((e) => players[e.idx].pos);
   const { flags: runFlags, z: runZ } = detectRuns(recent, shares);
 
   // μ' per pool player: shifted only where a run is flagged, damped by
@@ -261,14 +285,14 @@ export function recommend(board, league, state, opts = {}) {
   }
 
   // ── Score every candidate ───────────────────────────────────────────────
-  const strategy = getStrategy(state.strategy ?? league.strategy ?? 'balanced');
+  const strategy = resolveStrategy(state.strategy ?? league.strategy ?? 'balanced', opts.strategies ?? null);
   const overrideDelta = league.overrideDelta ?? strategy.overrideDelta;
   // My picks after the current one in rounds ≤ byRound (one pick per round).
   const futurePicksThrough = (byRound) => Math.max(0, Math.min(byRound, league.rounds) - round);
   const rho = round <= 4 ? 0 : -0.003;
   const myStarters = bestLineup(myRoster, S, flexEligible).starters;
 
-  const scored = candidates.map((p) => {
+  const scoreOne = (p) => {
     const value = mv(p);
     const s = survivalOf(p);
 
@@ -339,7 +363,8 @@ export function recommend(board, league, state, opts = {}) {
       evLossIfWait: vona,
       ceiling: p.eff + P90 * sigma,
     };
-  });
+  };
+  const scored = candidates.map(scoreOne);
 
   // ── Rank, override, ties ────────────────────────────────────────────────
   scored.sort((a, b) => b.score - a.score);
@@ -378,6 +403,31 @@ export function recommend(board, league, state, opts = {}) {
     return rec;
   });
 
+  // ── Force-scored extras (opts.includeIdxs) ──────────────────────────────
+  // Review/grading tooling needs "what would my actual pick have scored"
+  // even when the candidate filters (hard rules, slack restriction,
+  // candidateLimit) excluded that player. Scored through the exact same
+  // pipeline; the shortlist above is untouched.
+  const scoredExtras = [];
+  for (const idx of opts.includeIdxs ?? []) {
+    const p = players[idx];
+    if (!p || taken.has(idx)) continue;
+    const c = scoreOne(p);
+    scoredExtras.push({
+      idx,
+      score: c.score,
+      terms: c.terms,
+      survivalToNextPick: c.survivalToNextPick,
+      tierHoldProb: c.tierHoldProb,
+      tierHoldTwoProb: c.tierHoldTwoProb,
+      evLossIfWait: c.evLossIfWait,
+      ceiling: c.ceiling,
+      strategyCompliant: c.compliant,
+      strategyConflictPoints: c.compliant ? 0 : conflict,
+      forced: true,
+    });
+  }
+
   // ── Diagnostics + contract extras ───────────────────────────────────────
   const replacementIndices = {};
   for (const pos of OPTIMIZED) {
@@ -394,6 +444,7 @@ export function recommend(board, league, state, opts = {}) {
 
   return {
     recommendations,
+    scoredExtras,
     replacementIndices,
     thetaStar,
     tierCounts,
