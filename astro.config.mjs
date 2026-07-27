@@ -10,8 +10,8 @@ import AstroPWA from '@vite-pwa/astro';
 // '/<repo>/'. For a `<user>.github.io` root repo leave base as '/'.
 // The service-worker scope inherits from base — a mismatch here is the
 // "loads online, never works offline" failure mode. Verified in Phase 3.
-const SITE = 'https://example.github.io'; // TODO(Phase 0 gate): real Pages URL
-const BASE = '/';
+const SITE = 'https://moritzandre.github.io';
+const BASE = '/fantasyfdraft/';
 
 export default defineConfig({
   site: SITE,
