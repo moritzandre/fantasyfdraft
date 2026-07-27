@@ -33,6 +33,9 @@ const DEFAULT_ROUTE = '#/coach';
 const ROUTES = new Set(['#/coach', '#/waivers', '#/trade', '#/league']);
 
 const TABS: Array<[string, string]> = [
+  // First entry jumps back to the draft app's Hub — a full href, never
+  // matched as the active route (symmetry with the draft app's NavBar).
+  [import.meta.env.BASE_URL + '#/hub', '⌂ Hub'],
   ['#/coach', 'Coach'],
   ['#/waivers', 'Waivers'],
   ['#/trade', 'Trade'],

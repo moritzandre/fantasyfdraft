@@ -138,6 +138,9 @@
 /* ── Plan B: the printed sheet on-screen, drafted players struck ───────── */
 .lv-planb .bb-row.lv-struck { text-decoration: line-through; opacity: 0.45; }
 
+/* ── Persistent bottom nav (NavBar.tsx): pad screens above the fixed bar ── */
+.lv-app-navpad { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
 /* ── Practice mode: MockControls strip (64px) shrinks the grid ─────────── */
 .lv-mock-controls {
   height: 64px;

@@ -29,6 +29,7 @@ import { acceptUpdate, isUpdatePending } from '../../pwa';
 import '../../styles/live.css';
 import GuideScreen from './GuideScreen';
 import HubScreen from './HubScreen';
+import NavBar from './NavBar';
 import InstallGate, { gateApplies } from './InstallGate';
 import LeagueScreen from './LeagueScreen';
 import LiveScreen from './LiveScreen';
@@ -154,8 +155,17 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
 
   const activeProfile = profiles.profiles.find((p) => p.id === profiles.activeId);
 
+  // The persistent bottom nav shows everywhere EXCEPT the pick-clock cockpit
+  // (#/live keeps its full height + own panel tabs; TopBar/League navigate
+  // out). The padding class keeps every screen's tail scrollable above it.
+  const showNav = route !== '#/live';
+
   return (
-    <div class={`lv-app ${s.ui.grayscalePreview ? 'grayscale-preview' : ''}`}>
+    <div
+      class={`lv-app ${s.ui.grayscalePreview ? 'grayscale-preview' : ''} ${
+        showNav ? 'lv-app-navpad' : ''
+      }`}
+    >
       {swUpdate && (
         <button
           type="button"
@@ -218,6 +228,7 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
       {route === '#/planb' && <PlanBSheet s={s} store={store} board={board} />}
       {route === '#/guide' && <GuideScreen />}
       {route === '#/sim' && <SimLab s={s} store={store} board={board} />}
+      {showNav && <NavBar route={route} />}
     </div>
   );
 }
