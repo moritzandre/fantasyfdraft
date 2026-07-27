@@ -6,10 +6,15 @@
 //
 // Row = rank · tier letter (boxed) · tier-weighted left border · name (≤16
 // chars via shared/format.js) · pos-rank · team · bye · half-PPR proj · VBD ·
-// ADP · ADP-delta arrow · 8mm pen checkbox. Between tiers a labelled rule:
-// "TIER B → C · cliff 21 pts" — the cliff is the VBD drop across the
-// boundary (NOT raw eff: on a mixed-position board a QB's raw points tower
-// over a RB's, so only the above-replacement drop says what waiting costs).
+// ADP · ADP-delta arrow · 5mm pen checkbox (shrunk from 8mm after the Phase-1
+// laser proof clipped names; the reclaimed 3mm went to the name cell — see
+// .bb-row in print.css). Between tiers a labelled rule:
+// "RB TIER B → C · cliff 21 pts" — rendered where a POSITION starts a new
+// tier in overall order, from that position's board.tiers record (tiers are
+// per-position: on the mixed-position overall list adjacent letters differ
+// nearly every row, so a naive letter-change rule would print ~35 breaks in
+// the top 60 and shove ~14 rows off every column). Weak boundaries
+// (TierSep < 1.0) print as the dashed "treat as one tier" rule.
 //
 // Encoding discipline: ALL tier/position channels come from tokens.css custom
 // properties (via the .tier-* / .pos-* classes in print.css) — no hardcoded
@@ -95,6 +100,26 @@ export default function BigBoard({ board, league }: { board: any; league: any })
   const repl = replacementEff(players, board.baselinesPrior?.r ?? {});
   const pages = chunk(players, PER_PAGE);
 
+  // Tier-break rules, keyed by the player idx that OPENS a new tier of his
+  // position in overall order. Label + cliff + weak flag come from the
+  // PREVIOUS tier's record (its cliffPoints/tierSep describe this boundary).
+  const tierRec = new Map<string, any>(
+    (board.tiers ?? []).map((t: any) => [`${t.pos}:${t.tier}`, t])
+  );
+  const breakBefore = new Map<number, { label: string; weak: boolean }>();
+  const lastTierByPos: Record<string, number> = {};
+  for (const p of players) {
+    const prevTier = lastTierByPos[p.pos];
+    if (prevTier != null && p.tier !== prevTier) {
+      const prev = tierRec.get(`${p.pos}:${prevTier}`);
+      breakBefore.set(p.idx, {
+        label: `${p.pos} tier ${prev?.letter ?? '?'} → ${p.tierLetter} · cliff ${fmtInt(prev?.cliffPoints)} pts`,
+        weak: (prev?.tierSep ?? 1) < 1.0,
+      });
+    }
+    lastTierByPos[p.pos] = p.tier;
+  }
+
   return (
     <>
       {pages.map((page, pi) => (
@@ -111,19 +136,14 @@ export default function BigBoard({ board, league }: { board: any; league: any })
             {chunk(page, ROWS_PER_COL).map((col) => (
               <div class="bb-col">
                 <HeadRow />
-                {col.map((p, i) => {
-                  const prev = i > 0 ? col[i - 1] : null;
-                  const breakHere = prev && prev.tierLetter !== p.tierLetter;
-                  const vbd = (q: any) => q.eff - repl[q.pos];
+                {col.map((p) => {
+                  const brk = breakBefore.get(p.idx);
                   return (
                     <>
-                      {breakHere && (
-                        <div class="bb-tierbreak">
-                          Tier {prev.tierLetter} → {p.tierLetter} · cliff{' '}
-                          {fmtInt(Math.max(0, vbd(prev) - vbd(p)))} pts
-                        </div>
+                      {brk && (
+                        <div class={`bb-tierbreak${brk.weak ? ' weak' : ''}`}>{brk.label}</div>
                       )}
-                      <Row p={p} vbd={vbd(p)} />
+                      <Row p={p} vbd={p.eff - repl[p.pos]} />
                     </>
                   );
                 })}

@@ -15,10 +15,13 @@ size assert is the actual gate, not the exit code.
 
 Usage:
   python tools/make_pdfs.py --preset minimal|core|full [--paper a4|letter|both]
-                            [--mode color|gray|both] [--sheet <id>]
+                            [--mode color|gray|both] [--sheet <id>] [--slot N]
   --sheet overrides the preset (single-sheet reprint after a late board change).
+  --slot picks which slot's variant of the slot-dependent sheets to render
+         (they live at sheets/s<slot>/<id>/); default = config/league.json slot.
 """
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -47,6 +50,18 @@ def site_base() -> str:
 
 
 BASE = site_base()
+
+# Slot-DEPENDENT sheets render once per slot at docs/sheets/s<slot>/<id>/
+# (plan AMENDMENT: every slot 1..N is selectable); everything else is shared
+# at docs/sheets/<id>/. Must match the `slotted` flags in the sheet registry
+# (src/pages/sheets/[...slug].astro).
+SLOT_SHEETS = {"ops-card", "strategy-brief", "targets-fades", "blank-board", "pace-card"}
+
+
+def sheet_rel(sheet: str, slot: int) -> str:
+    """Route fragment under sheets/ for this sheet id at this slot."""
+    return f"s{slot}/{sheet}" if sheet in SLOT_SHEETS else sheet
+
 
 # Sheet ids == routes under docs/sheets/<id>/. Presets from the plan:
 # MINIMAL = S1 + S4-S5 + S13 (4 pages), CORE = + S2-S3, S6-S9, S14, FULL = 14.
@@ -90,9 +105,11 @@ def serve_docs():
     return httpd
 
 
-def render(sheet: str, paper: str, mode: str) -> Path:
-    url = f"http://{HOST}:{PORT}{BASE}sheets/{sheet}/?paper={paper}&mode={mode}"
-    pdf = OUT / f"sheet_{sheet}_{paper}_{mode}.pdf"
+def render(sheet: str, paper: str, mode: str, slot: int) -> Path:
+    rel = sheet_rel(sheet, slot)
+    url = f"http://{HOST}:{PORT}{BASE}sheets/{rel}/?paper={paper}&mode={mode}"
+    slot_tag = f"_s{slot}" if sheet in SLOT_SHEETS else ""
+    pdf = OUT / f"sheet_{sheet}{slot_tag}_{paper}_{mode}.pdf"
     pdf.unlink(missing_ok=True)  # a stale file must not satisfy the assert
     cmd = [
         CHROME,
@@ -125,6 +142,12 @@ def main():
     ap.add_argument("--paper", choices=["a4", "letter", "both"], default="both")
     ap.add_argument("--mode", choices=["color", "gray", "both"], default="both")
     ap.add_argument("--sheet", help="single sheet id, overrides --preset")
+    default_slot = json.loads(
+        (ROOT / "config" / "league.json").read_text("utf-8")
+    ).get("slot", 8)
+    ap.add_argument("--slot", type=int, default=default_slot,
+                    help=f"slot variant for slot-dependent sheets (default {default_slot} "
+                         "from config/league.json)")
     args = ap.parse_args()
 
     if not Path(CHROME).exists():
@@ -136,7 +159,8 @@ def main():
     sheets = [args.sheet] if args.sheet else PRESETS[args.preset]
     built, skipped = [], []
     for s in sheets:
-        (built if (DOCS / "sheets" / s / "index.html").exists() else skipped).append(s)
+        rel = sheet_rel(s, args.slot)
+        (built if (DOCS / "sheets" / Path(rel) / "index.html").exists() else skipped).append(s)
     if skipped:
         print(f"skipping (not built yet): {', '.join(skipped)}", file=sys.stderr)
     if not built:
@@ -148,7 +172,7 @@ def main():
     httpd = serve_docs()
     try:
         # Sanity-fetch the first sheet before spending a Chrome launch on it.
-        probe = f"http://{HOST}:{PORT}{BASE}sheets/{built[0]}/"
+        probe = f"http://{HOST}:{PORT}{BASE}sheets/{sheet_rel(built[0], args.slot)}/"
         with urllib.request.urlopen(probe, timeout=5) as r:
             if r.status != 200:
                 sys.exit(f"server probe {probe} returned {r.status}")
@@ -156,7 +180,7 @@ def main():
         for s in built:
             for paper in papers:
                 for mode in modes:
-                    render(s, paper, mode)
+                    render(s, paper, mode, args.slot)
                     n += 1
         print(f"done: {n} PDFs in {OUT}")
     finally:

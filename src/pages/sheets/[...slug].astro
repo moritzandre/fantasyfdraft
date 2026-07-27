@@ -1,0 +1,170 @@
+---
+// sheets/[...slug].astro — one static route per printed sheet, rendered at
+// build time with the REAL board baked in: no runtime fetch, no ES modules,
+// fully static HTML for Chrome to print.
+//
+// SLOT DIMENSION (plan AMENDMENT): slot-independent sheets emit at
+// sheets/<id>/; slot-DEPENDENT sheets (ops-card, targets-fades, blank-board —
+// later strategy-brief and pace-card) emit once per slot at
+// sheets/s<slot>/<id>/ for every slot 1..N. tools/make_pdfs.py maps the same
+// ids to the same URLs (--slot, default from config/league.json).
+//
+// STYLE ISOLATION (non-negotiable): these pages import tokens.css + print.css
+// ONLY — never global.css, so Tailwind's preflight cannot leak into the
+// exact-mm paged layout. That is why this page has its own <html> skeleton
+// instead of AppLayout.astro.
+//
+// DATA: public/data/board.json (the committed snapshot — sheets print the
+// board as committed) plus the committed overrides.json (tag reasons → S10,
+// handcuff pairs → S11). No runtime override merging happens here.
+import '../../styles/tokens.css';
+import '../../styles/print.css';
+import BigBoard from '../../components/print/BigBoard';
+import OpsCard from '../../components/print/OpsCard';
+import TierSheet from '../../components/print/TierSheet';
+import TargetsFades from '../../components/print/TargetsFades';
+import HandcuffMap from '../../components/print/HandcuffMap';
+import ByeGrid from '../../components/print/ByeGrid';
+import BlankBoard from '../../components/print/BlankBoard';
+import StrategyBrief from '../../components/print/StrategyBrief';
+import PaceCard from '../../components/print/PaceCard';
+import board from '../../../public/data/board.json';
+import overrides from '../../../public/data/overrides.json';
+import league from '../../../config/league.json';
+
+// mc.json is OPTIONAL at build time (S2–S3 and S14 depend on it; everything
+// else ignores it). A direct `import` would fail the WHOLE build when the file
+// is missing, so it resolves through import.meta.glob: absent ⇒ mc === null
+// and the MC sheets render their "run node tools/simulate.mjs" banner instead.
+const mcModules = import.meta.glob('../../../public/data/mc.json', {
+  eager: true,
+  import: 'default',
+});
+const mc: any = Object.values(mcModules)[0] ?? null;
+
+// The sheet registry: id → component (+ flags + fixed props). Complete: all
+// 14 sheets, incl. the MC-dependent S2–S3 (strategy-brief) and S14 (pace-card).
+//   slotted:   emit once per slot at sheets/s<slot>/<id>/
+//   landscape: @page size flips (the component renders .sheet.landscape)
+export const SHEETS: Record<string, any> = {
+  'ops-card': { title: 'S1 · Draft-Day Ops Card', component: OpsCard, slotted: true },
+  'strategy-brief': {
+    title: 'S2–S3 · Strategy Brief',
+    component: StrategyBrief,
+    slotted: true,
+  },
+  'big-board': { title: 'S4 · Master Big Board', component: BigBoard },
+  'tiers-rb': {
+    title: 'S6 · RB Tiers',
+    component: TierSheet,
+    props: { positions: ['RB'], pageId: 'S6', title: 'RB Tiers' },
+  },
+  'tiers-wr': {
+    title: 'S7 · WR Tiers',
+    component: TierSheet,
+    props: { positions: ['WR'], pageId: 'S7', title: 'WR Tiers' },
+  },
+  'tiers-te': {
+    title: 'S8 · TE Tiers',
+    component: TierSheet,
+    props: { positions: ['TE'], pageId: 'S8', title: 'TE Tiers' },
+  },
+  'tiers-qb-k-dst': {
+    title: 'S9 · QB + K/DST Tiers',
+    component: TierSheet,
+    props: { positions: ['QB'], kdst: true, pageId: 'S9', title: 'QB + K/DST Tiers' },
+  },
+  'targets-fades': {
+    title: 'S10 · Targets / Fades / Late Darts',
+    component: TargetsFades,
+    slotted: true,
+  },
+  'handcuff-map': { title: 'S11 · Handcuff & Contingency Map', component: HandcuffMap },
+  'bye-grid': { title: 'S12 · Bye-Week & SoS Grid', component: ByeGrid, landscape: true },
+  'blank-board': {
+    title: 'S13 · Blank Draft Board',
+    component: BlankBoard,
+    slotted: true,
+    landscape: true,
+  },
+  'pace-card': {
+    title: 'S14 · Round-by-Round Pace Card',
+    component: PaceCard,
+    slotted: true,
+  },
+};
+
+export function getStaticPaths() {
+  const paths = [];
+  for (const [id, entry] of Object.entries(SHEETS)) {
+    if (entry.slotted) {
+      for (let s = 1; s <= league.teams; s++) {
+        paths.push({ params: { slug: `s${s}/${id}` }, props: { id, slot: s } });
+      }
+    } else {
+      paths.push({ params: { slug: id }, props: { id, slot: league.slot } });
+    }
+  }
+  return paths;
+}
+
+const { id, slot } = Astro.props;
+const entry = SHEETS[id];
+const Sheet = entry.component;
+const orient = entry.landscape ? 'landscape' : 'portrait';
+const title = entry.slotted ? `${entry.title} · slot ${slot}` : entry.title;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <script is:inline define:vars={{ orient }}>
+      // ?paper=a4|letter & ?mode=color|gray are RUNTIME switches on a static
+      // page — the build cannot see query params. This sets html.paper-* /
+      // html.mode-* (print.css keys off the classes) and injects the matching
+      // @page size (an @page rule cannot switch on a class); orientation is a
+      // build-time property of the sheet, injected via define:vars.
+      //
+      // The classes are set synchronously (before first paint), but the @page
+      // <style> is appended at DOMContentLoaded: Astro emits the bundled
+      // print.css <link> AFTER this script, and @page descriptors ignore
+      // !important, so the injected rule must come LATER IN DOM ORDER than the
+      // stylesheet or print.css's portrait default wins the cascade — which is
+      // exactly how the landscape sheets once printed portrait. Headless
+      // Chrome prints after load, so DOMContentLoaded is early enough.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var paper = q.get('paper') === 'letter' ? 'letter' : 'a4';
+        var mode = q.get('mode') === 'gray' ? 'gray' : 'color';
+        document.documentElement.className = 'paper-' + paper + ' mode-' + mode;
+        var inject = function () {
+          var s = document.createElement('style');
+          s.textContent =
+            '@page { size: ' +
+            (paper === 'letter' ? 'Letter' : 'A4') +
+            ' ' +
+            orient +
+            '; margin: 0; }';
+          document.head.appendChild(s);
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', inject);
+        } else {
+          inject();
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <Sheet
+      board={board}
+      league={league}
+      slot={slot}
+      overrides={overrides}
+      mc={mc}
+      {...entry.props ?? {}}
+    />
+  </body>
+</html>

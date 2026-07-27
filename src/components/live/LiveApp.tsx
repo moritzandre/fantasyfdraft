@@ -7,12 +7,13 @@
 // ui.grayscalePreview. The Install Gate blocks #/live mutations on a touch
 // device outside standalone mode (desktop dev is never gated).
 
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { validateBoard } from '../../../shared/schema.js';
 import leagueDefault from '../../../config/league.json';
 import leagueRaw from '../../../config/league.json?raw';
 import type { Board, DraftState, LeagueConfig, Store } from '../../state/store';
 import { bootPersistedStore } from '../../state/persist';
+import { applyPrefs, loadPrefs } from '../../state/prefs';
 import '../../styles/live.css';
 import InstallGate, { gateApplies } from './InstallGate';
 import LiveScreen from './LiveScreen';
@@ -20,9 +21,11 @@ import PickLog from './PickLog';
 import PlanBSheet from './PlanBSheet';
 import ReadyCheck from './ReadyCheck';
 import SetupScreen from './SetupScreen';
+import SyncPanel from './SyncPanel';
+import PrepScreen from '../prep/PrepScreen';
 
 const DEFAULT_ROUTE = '#/ready';
-const ROUTES = new Set(['#/ready', '#/setup', '#/live', '#/log', '#/planb']);
+const ROUTES = new Set(['#/ready', '#/setup', '#/prep', '#/live', '#/log', '#/planb', '#/sync']);
 
 function useRoute(): string {
   const [route, setRoute] = useState(
@@ -56,7 +59,7 @@ async function leagueFingerprint(): Promise<string | null> {
   }
 }
 
-function StoreApp({ board, store }: { board: Board; store: Store }) {
+function StoreApp({ board, rawBoard, store }: { board: Board; rawBoard: Board; store: Store }) {
   const s = useStoreState(store);
   const route = useRoute();
   const [fpMismatch, setFpMismatch] = useState(false);
@@ -102,11 +105,25 @@ function StoreApp({ board, store }: { board: Board; store: Store }) {
           {fpMismatch && 'Board was built against a DIFFERENT league config — rebuild board.json.'}
         </div>
       )}
-      {route === '#/ready' && <ReadyCheck s={s} store={store} board={board} />}
+      {route === '#/ready' && (
+        <>
+          <ReadyCheck s={s} store={store} board={board} />
+          <div class="mx-auto max-w-xl px-4 pb-16">
+            <a
+              href="#/prep"
+              class="flex min-h-14 items-center justify-center rounded-xl border border-app-border bg-app-surface font-bold"
+            >
+              Prep mode — board · tiers · tags · overrides · strategy · rehearsal
+            </a>
+          </div>
+        </>
+      )}
       {route === '#/setup' && <SetupScreen s={s} store={store} />}
+      {route === '#/prep' && <PrepScreen s={s} store={store} board={rawBoard} />}
       {route === '#/live' &&
         (gated ? <InstallGate variant="gate" onAck={ack} /> : <LiveScreen s={s} store={store} board={board} />)}
       {route === '#/log' && <PickLog s={s} store={store} board={board} />}
+      {route === '#/sync' && <SyncPanel s={s} store={store} board={board} />}
       {route === '#/planb' && <PlanBSheet s={s} store={store} board={board} />}
     </div>
   );
@@ -127,13 +144,18 @@ export default function LiveApp() {
       .catch((e) => setFatal(String(e?.message ?? e)));
   }, []);
 
+  // The prep layer (tags, overrides, tier edits — src/state/prefs.ts) is
+  // applied to the fetched board ONCE, before createStore boot: live and prep
+  // preview derive from the same pure applyPrefs.
+  const applied = useMemo(() => (board ? applyPrefs(board, loadPrefs()) : null), [board]);
+
   // bootPersistedStore is async (IDB tier read at boot) — the store arrives
   // one microtask after the board; localStorage restore still wins by max-rev.
   const [store, setStore] = useState<Store | null>(null);
   useEffect(() => {
-    if (!board) return;
+    if (!applied) return;
     let cancelled = false;
-    bootPersistedStore({ board, league: leagueDefault as unknown as LeagueConfig })
+    bootPersistedStore({ board: applied, league: leagueDefault as unknown as LeagueConfig })
       .then((st) => {
         if (!cancelled) setStore(st);
       })
@@ -141,7 +163,7 @@ export default function LiveApp() {
     return () => {
       cancelled = true;
     };
-  }, [board]);
+  }, [applied]);
 
   if (fatal) {
     return (
@@ -154,8 +176,8 @@ export default function LiveApp() {
       </main>
     );
   }
-  if (!board || !store) {
+  if (!board || !applied || !store) {
     return <p class="px-6 py-16 text-center text-app-dim">Loading board…</p>;
   }
-  return <StoreApp board={board} store={store} />;
+  return <StoreApp board={applied} rawBoard={board} store={store} />;
 }

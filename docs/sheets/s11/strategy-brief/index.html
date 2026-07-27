@@ -1,0 +1,108 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>S2–S3 · Strategy Brief · slot 11</title><script>(function(){const orient = "portrait";
+
+      // ?paper=a4|letter & ?mode=color|gray are RUNTIME switches on a static
+      // page — the build cannot see query params. This sets html.paper-* /
+      // html.mode-* (print.css keys off the classes) and injects the matching
+      // @page size (an @page rule cannot switch on a class); orientation is a
+      // build-time property of the sheet, injected via define:vars.
+      //
+      // The classes are set synchronously (before first paint), but the @page
+      // <style> is appended at DOMContentLoaded: Astro emits the bundled
+      // print.css <link> AFTER this script, and @page descriptors ignore
+      // !important, so the injected rule must come LATER IN DOM ORDER than the
+      // stylesheet or print.css's portrait default wins the cascade — which is
+      // exactly how the landscape sheets once printed portrait. Headless
+      // Chrome prints after load, so DOMContentLoaded is early enough.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var paper = q.get('paper') === 'letter' ? 'letter' : 'a4';
+        var mode = q.get('mode') === 'gray' ? 'gray' : 'color';
+        document.documentElement.className = 'paper-' + paper + ' mode-' + mode;
+        var inject = function () {
+          var s = document.createElement('style');
+          s.textContent =
+            '@page { size: ' +
+            (paper === 'letter' ? 'Letter' : 'A4') +
+            ' ' +
+            orient +
+            '; margin: 0; }';
+          document.head.appendChild(s);
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', inject);
+        } else {
+          inject();
+        }
+      })();
+    })();</script><link rel="stylesheet" href="/fantasyfdraft/_astro/_slug_.ArpIs1QY.css"></head> <body> <style>
+.sb { font-size: 9pt; }
+.sb-warn {
+  border: 1.5pt dashed #000; padding: 1.5mm; margin: 1mm 0 2mm;
+  font-size: 9pt; font-weight: 700;
+}
+.sb-pickline { font-size: 10pt; margin-bottom: 2mm; }
+.sb-start {
+  border: 1.5pt solid #000; background: #ececec; text-align: center;
+  font-size: 10pt; font-weight: 700; letter-spacing: 0.04em;
+  padding: 1.2mm 0; text-transform: uppercase;
+}
+.sb-else { text-align: center; font-size: 7.5pt; color: #333; padding: 0.6mm 0; }
+.sb-branch { border: 1pt solid #000; border-left: 3pt solid #000; padding: 1.5mm 2mm; break-inside: avoid; }
+.sb-branch h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.03em; }
+.sb-check { font-size: 9.5pt; font-weight: 700; margin-top: 0.6mm; }
+.sb-cbx {
+  display: inline-block; width: 3.4mm; height: 3.4mm; border: 0.75pt solid #000;
+  vertical-align: -0.6mm; margin-right: 1.2mm; background: #fff;
+}
+.sb-mc { font-size: 8pt; color: #222; margin-top: 0.5mm; }
+.sb-cow { font-size: 8.5pt; margin-top: 0.7mm; line-height: 1.3; }
+.sb-act { font-size: 9.5pt; font-weight: 700; margin-top: 0.8mm; }
+.sb-h {
+  font-size: 8pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #333; border-bottom: 0.5pt solid #000; margin: 2.5mm 0 1mm;
+}
+.sb-strip { border: 0.75pt solid #000; }
+.sb-strip-row {
+  display: grid; grid-template-columns: 34mm 1fr 1fr 1fr 1fr 1fr;
+  font-size: 8pt; line-height: 1.45; align-items: center;
+  border-bottom: 0.5pt solid #bbb; padding-left: 1.5mm;
+}
+.sb-strip-row:last-child { border-bottom: none; }
+.sb-strip-hd { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; color: #333; }
+.sb-strip-row > span { text-align: right; padding-right: 2mm; }
+.sb-strip-row > span:first-child { text-align: left; font-weight: 700; }
+.sb-cowbox { border: 0.75pt solid #000; padding: 1.2mm 2mm; font-size: 8pt; margin-top: 2.5mm; line-height: 1.35; }
+.sb-gapstrip { display: grid; grid-template-columns: repeat(16, 1fr); gap: 0.6mm; margin-bottom: 1mm; }
+.sb-gapcell { border: 0.5pt solid #000; text-align: center; padding: 0.4mm 0; font-size: 7pt; }
+.sb-gapcell b { display: block; font-size: 9pt; }
+.sb-gapcell .g { display: block; font-size: 6.5pt; margin-top: 0.3mm; }
+.sb-gapcell.lg .g { background: #3a3a3a; color: #fff; font-weight: 700; }
+.sb-gapcell.sg .g { background: #e8e8e8; }
+.sb-strats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.6mm; }
+.sb-strat { border: 0.75pt solid #000; padding: 1mm 1.2mm; }
+.sb-strat h3 { font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.03em; }
+.sb-strat .blurb { font-size: 6.5pt; color: #333; line-height: 1.25; min-height: 6mm; }
+.sb-mini { display: grid; grid-template-columns: 7mm repeat(16, 1fr); margin-top: 0.6mm; }
+.sb-mini span {
+  border: 0.25pt solid #ccc; font-size: 5.5pt; text-align: center; line-height: 2.8mm;
+  overflow: hidden;
+}
+.sb-mini span.lbl { border: none; font-weight: 700; font-size: 5.5pt; text-align: left; }
+.sb-mini span.up { background: #d7d7d7; font-weight: 700; }
+.sb-mini span.dn { background: #fff; color: #555; }
+.sb-mini span.lgr { border-bottom: 1.2pt solid #000; }
+.sb-cons { font-size: 6.5pt; margin-top: 0.7mm; line-height: 1.35; }
+.sb-cons b { text-transform: uppercase; font-size: 6pt; }
+.sb-modal-hd, .sb-modal-row {
+  display: grid; grid-template-columns: 9mm 1fr 62mm 13mm;
+  font-size: 7.5pt; line-height: 1.25; align-items: center;
+  border-bottom: 0.5pt solid #bbb; padding: 0.5mm 0;
+}
+.sb-modal-hd { font-size: 6pt; font-weight: 700; text-transform: uppercase; color: #333; border-bottom: 1pt solid #000; }
+.sb-modal-row > span:first-child, .sb-modal-hd > span:first-child { text-align: right; padding-right: 1.5mm; font-weight: 700; }
+.sb-modal-row .ev, .sb-modal-hd .ev { text-align: right; padding-right: 1mm; font-weight: 700; }
+.sb-modal-row .top3 { padding-right: 1mm; }
+.sb-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; margin-top: 2.5mm; }
+.sb-box { border: 1.5pt solid #000; padding: 1.5mm 2mm; font-size: 9pt; line-height: 1.3; }
+.sb-box b { display: block; font-size: 10pt; text-transform: uppercase; letter-spacing: 0.04em; }
+</style><section class="sheet sb"><header class="sheet-head"><h1>Strategy Brief · S2 · Slot 11 — the pick-11 decision tree</h1><p class="sheet-meta">tick the first condition that is TRUE, top to bottom — the MC numbers are the printed form of the same engine the app runs · CoW = cost of waiting</p></header><p class="sb-pickline">You pick at <b>11</b>, then <b>14</b> (gap 3 — short side, κ 1.0), then <b>35</b> (gap 21).</p><div class="sb-start">On the clock at pick 11 — check in order</div><div class="sb-branch"><h2>A · Last elite RB</h2><div class="sb-check"><span class="sb-cbx"></span>A Tier-A RB is still on the board at pick 11</div><div class="sb-mc num">MC @ pick 11: E[Tier-A RBs left] = 0.1 · P(≥1) = 11%</div><div class="sb-cow">CoW: he survives to pick 14 with P = 1% — waiting risks the full A→B cliff (18 pts). (1 − survival) × cliff ≈ the whole cliff.</div><div class="sb-act">→ TAKE HIM. The last elite RB does not live through a 3-pick wait.</div></div><div class="sb-else">— else ↓ —</div><div class="sb-branch"><h2>B · Best deep-tier WR</h2><div class="sb-check"><span class="sb-cbx"></span>No Tier-A RB left — or a Tier-A WR clearly outranks the best RB</div><div class="sb-mc num">MC @ pick 11: E[Tier-A WRs left] = 2.2 · P(≥2) = 86% · Tier B behind is 15.7 deep</div><div class="sb-cow">CoW: the ELITE WR is the scarce asset — Tier A holds to pick 14 with only P = 90%. The B-tier depth behind him is exactly why your SECOND WR can wait: E[best WR at 14] barely drops.</div><div class="sb-act">→ Take the best Tier-A WR now; plan RB/RB or RB/TE at picks 14 and 35.</div></div><div class="sb-else">— else ↓ —</div><div class="sb-branch"><h2>C · Elite TE</h2><div class="sb-check"><span class="sb-cbx"></span>RB and WR Tier A both gone (or only tied, sub-45-rec options left)</div><div class="sb-mc num">MC @ pick 11: TE Tier A P(≥1) = 100% · holds to 14 with P = 100%</div><div class="sb-cow">CoW: if the hold probability to pick 14 is high, the elite TE WAITS — CoW ≈ 0 and taking him now burns the RB/WR cliff instead. Take him at 11 only when the hold drops under ~60% (cliff to next TE tier: 11 pts — the 2-FLEX elite-TE edge).</div><div class="sb-act">→ Default: pass, and let branch A or B decide — the tree exists for the day the room breaks it.</div></div><div class="sb-h">The check strip — what the room leaves you (MC, 20000 sims)</div><div class="sb-strip num"><div class="sb-strip-row sb-strip-hd"><span>tier</span><span>E[left] @ 11</span><span>P(≥1) @ 11</span><span>P(≥1) @ 14</span><span>P(≥2) @ 14</span><span>cliff below</span></div><div class="sb-strip-row"><span>RB Tier A</span><span>0.1</span><span>11%</span><span>1%</span><span>&lt;1%</span><span>18 pts</span></div><div class="sb-strip-row"><span>RB Tier B</span><span>6.1</span><span>100%</span><span>100%</span><span>100%</span><span>1 pts</span></div><div class="sb-strip-row"><span>WR Tier A</span><span>2.2</span><span>>99%</span><span>90%</span><span>40%</span><span>15 pts</span></div><div class="sb-strip-row"><span>WR Tier B</span><span>15.7</span><span>100%</span><span>100%</span><span>100%</span><span>1 pts</span></div><div class="sb-strip-row"><span>TE Tier A</span><span>4.0</span><span>100%</span><span>100%</span><span>100%</span><span>11 pts</span></div></div><div class="sb-cowbox"><b>CoW, one line:</b> CoW(i) = (1 − survival to your next pick) × (his value now − the best you'd expect at that position when pick 14 comes back around). A tier cliff IS the drop in that expectation — there is no separate cliff bonus, here or in the app. κ = 1.3 multiplies CoW before a wait longer than 12 picks.</div><footer class="sheet-foot">snapshot 89e9f87 · 2026-07-27 · slot 11 · 12-team half-PPR · p1/2 · S2</footer></section><section class="sheet sb"><header class="sheet-head"><h1>Strategy Brief · S3 · Slot 11 — round shapes &amp; the modal boards</h1><p class="sheet-meta">dark gap cells = long-side waits (κ 1.3 — take the one that will be gone) · m(POS) = score multiplier; heavy underline marks long-gap rounds</p></header><div class="sb-h">Your gap structure — slot 11 of 12</div><div class="sb-gapstrip num"><div class="sb-gapcell sg">R1<b>11</b><span class="g">+3</span></div><div class="sb-gapcell lg">R2<b>14</b><span class="g">+21</span></div><div class="sb-gapcell sg">R3<b>35</b><span class="g">+3</span></div><div class="sb-gapcell lg">R4<b>38</b><span class="g">+21</span></div><div class="sb-gapcell sg">R5<b>59</b><span class="g">+3</span></div><div class="sb-gapcell lg">R6<b>62</b><span class="g">+21</span></div><div class="sb-gapcell sg">R7<b>83</b><span class="g">+3</span></div><div class="sb-gapcell lg">R8<b>86</b><span class="g">+21</span></div><div class="sb-gapcell sg">R9<b>107</b><span class="g">+3</span></div><div class="sb-gapcell lg">R10<b>110</b><span class="g">+21</span></div><div class="sb-gapcell sg">R11<b>131</b><span class="g">+3</span></div><div class="sb-gapcell lg">R12<b>134</b><span class="g">+21</span></div><div class="sb-gapcell sg">R13<b>155</b><span class="g">+3</span></div><div class="sb-gapcell lg">R14<b>158</b><span class="g">+21</span></div><div class="sb-gapcell sg">R15<b>179</b><span class="g">+3</span></div><div class="sb-gapcell ">R16<b>182</b><span class="g">END</span></div></div><div class="sb-h">The four strategies — priors, not handcuffs</div><div class="sb-strats"><div class="sb-strat"><h3>balanced</h3><div class="blurb">Pure tier discipline, no multipliers. Most robust default.</div><div class="sb-mini"><span class="lbl">m</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class>·</span></div><div class="sb-cons"><b>hard:</b> none</div></div><div class="sb-strat"><h3>anchor rb</h3><div class="blurb">One elite RB, then pass-catchers; RB again R6–9.</div><div class="sb-mini num"><span class="lbl">RB</span><span class="up">1.15</span><span class="dn lgr">.70</span><span class="dn">.70</span><span class="dn lgr">.70</span><span class="dn">.70</span><span class="up lgr">1.20</span><span class="up">1.20</span><span class="up lgr">1.20</span><span class="up">1.20</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class>·</span></div><div class="sb-cons"><b>hard:</b> ≥1 RB by R1 · ≤1 RB thru R4 · ≥3 RB by R9</div></div><div class="sb-strat"><h3>zero rb mod</h3><div class="blurb">No RB before R4 — load WR/TE while the room burns RBs.</div><div class="sb-mini"><span class="lbl">m</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class="lgr">·</span><span class>·</span><span class>·</span></div><div class="sb-cons"><b>hard:</b> ≤0 RB thru R3</div></div><div class="sb-strat"><h3>robust rb</h3><div class="blurb">2 RB by R3, 3 by R5 — volume early (weakest from a late slot).</div><div class="sb-mini num"><span class="lbl">RB</span><span class="up">1.25</span><span class="up lgr">1.25</span><span class="up">1.25</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class=" lgr">·</span><span class>·</span><span class>·</span></div><div class="sb-cons"><b>hard:</b> ≥2 RB by R3 · ≥3 RB by R5</div></div></div><div class="sb-h">The 10 modal pick-11 boards (MC, 20000 sims) — engine recommendation on each</div><div class="sb-modal-hd"><span>p</span><span>board by pick 11</span><span>engine top-3 (score)</span><span class="ev">if wait</span></div><div class="sb-modal-row num"><span>37%</span><span>By pick 11: 6 RB (4×A), 4 WR (4×A) gone — A. St. Brown.</span><span class="top3">A. St. Brown (131) · D. Achane (92) · C. Lamb (91)</span><span class="ev">−31</span></div><div class="sb-modal-row num"><span>17%</span><span>By pick 11: 7 RB (4×A), 3 WR (3×A) gone — J. Smith-Njigba.</span><span class="top3">J. Smith-Njigba (131) · C. Lamb (86) · O. Hampton (80)</span><span class="ev">−29</span></div><div class="sb-modal-row num"><span>15%</span><span>By pick 11: 5 RB (4×A), 5 WR (4×A) gone — A. St. Brown.</span><span class="top3">A. St. Brown (130) · D. Achane (92) · O. Hampton (80)</span><span class="ev">−30</span></div><div class="sb-modal-row num"><span>11%</span><span>By pick 11: 6 RB (4×A), 4 WR (3×A) gone — A. St. Brown.</span><span class="top3">A. St. Brown (126) · D. Achane (92) · C. Lamb (86)</span><span class="ev">−26</span></div><div class="sb-modal-row num"><span>10%</span><span>By pick 11: 5 RB (4×A), 5 WR (5×A) gone — D. Achane.</span><span class="top3">D. Achane (92) · O. Hampton (80) · K. Walker III (78)</span><span class="ev">−4</span></div><div class="sb-modal-row num"><span>3%</span><span>By pick 11: 6 RB (3×A), 4 WR (4×A) gone — B. Robinson.</span><span class="top3">B. Robinson (183) · C. Lamb (94) · O. Hampton (80)</span><span class="ev">−49</span></div><div class="sb-modal-row num"><span>2%</span><span>By pick 11: 5 RB (3×A), 5 WR (4×A) gone — J. Taylor.</span><span class="top3">J. Taylor (133) · C. Lamb (94) · D. Achane (92)</span><span class="ev">−24</span></div><div class="sb-modal-row num"><span>2%</span><span>By pick 11: 5 RB (3×A), 5 WR (5×A) gone — J. Taylor.</span><span class="top3">J. Taylor (134) · O. Hampton (80) · K. Walker III (78)</span><span class="ev">−25</span></div><div class="sb-modal-row num"><span>1%</span><span>By pick 11: 7 RB (4×A), 3 WR (2×A) gone — J. Smith-Njigba.</span><span class="top3">J. Smith-Njigba (130) · A. St. Brown (125) · C. Lamb (85)</span><span class="ev">−28</span></div><div class="sb-modal-row num"><span>1%</span><span>By pick 11: 4 RB (4×A), 6 WR (5×A) gone — C. Lamb.</span><span class="top3">C. Lamb (97) · D. Achane (92) · O. Hampton (80)</span><span class="ev">−19</span></div><div class="sb-boxes"><div class="sb-box"><b>Override rule</b>If the off-strategy best beats the compliant best by more than 20 pts, the app SURFACES the conflict — it never silently obeys the strategy. On paper: a 20+ pt gap to the shape above means take the player, not the plan.</div><div class="sb-box"><b>Half-PPR reminder</b>No RB under 45 projected receptions in rounds 1–3 — his value is TD variance, not catches (hatched on the tier sheets). Elite TE and pass-catching RBs are worth MORE here than standard advice assumes: this league starts ~63 RB/WR every week.</div></div><footer class="sheet-foot">snapshot 89e9f87 · 2026-07-27 · slot 11 · 12-team half-PPR · p2/2 · S3</footer></section> </body></html>

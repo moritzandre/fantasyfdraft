@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>S1 · Draft-Day Ops Card · slot 12</title><script>(function(){const orient = "portrait";
+
+      // ?paper=a4|letter & ?mode=color|gray are RUNTIME switches on a static
+      // page — the build cannot see query params. This sets html.paper-* /
+      // html.mode-* (print.css keys off the classes) and injects the matching
+      // @page size (an @page rule cannot switch on a class); orientation is a
+      // build-time property of the sheet, injected via define:vars.
+      //
+      // The classes are set synchronously (before first paint), but the @page
+      // <style> is appended at DOMContentLoaded: Astro emits the bundled
+      // print.css <link> AFTER this script, and @page descriptors ignore
+      // !important, so the injected rule must come LATER IN DOM ORDER than the
+      // stylesheet or print.css's portrait default wins the cascade — which is
+      // exactly how the landscape sheets once printed portrait. Headless
+      // Chrome prints after load, so DOMContentLoaded is early enough.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var paper = q.get('paper') === 'letter' ? 'letter' : 'a4';
+        var mode = q.get('mode') === 'gray' ? 'gray' : 'color';
+        document.documentElement.className = 'paper-' + paper + ' mode-' + mode;
+        var inject = function () {
+          var s = document.createElement('style');
+          s.textContent =
+            '@page { size: ' +
+            (paper === 'letter' ? 'Letter' : 'A4') +
+            ' ' +
+            orient +
+            '; margin: 0; }';
+          document.head.appendChild(s);
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', inject);
+        } else {
+          inject();
+        }
+      })();
+    })();</script><link rel="stylesheet" href="/fantasyfdraft/_astro/_slug_.ArpIs1QY.css"></head> <body> <section class="sheet oc"><header class="sheet-head"><h1>Draft-Day Ops Card · S1 · Slot 12</h1><p class="sheet-meta">the top page of the stack — picks, rules, and what to do when something breaks</p></header><div class="oc-section"><div class="oc-h">League</div><p class="oc-league">12-team half-PPR · snake · drafting from slot 12 · 16 rounds · 192 total picks<br/>Roster 1QB / 2RB / 2WR / 1TE / 2FLEX / 1K / 1DST / 6BN · flex: RB/WR/TE · tie threshold ε 4 pts · strategy override at 20 pts</p></div><div class="oc-section"><div class="oc-h">My picks — gap-after banded (light = short wait, dark = long wait)</div><div class="oc-grid"><div class="oc-cell oc-short"><div class="oc-pick num">12</div><div class="oc-round">R1</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">13</div><div class="oc-round">R2</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">36</div><div class="oc-round">R3</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">37</div><div class="oc-round">R4</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">60</div><div class="oc-round">R5</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">61</div><div class="oc-round">R6</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">84</div><div class="oc-round">R7</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">85</div><div class="oc-round">R8</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">108</div><div class="oc-round">R9</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">109</div><div class="oc-round">R10</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">132</div><div class="oc-round">R11</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">133</div><div class="oc-round">R12</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">156</div><div class="oc-round">R13</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-long"><div class="oc-pick num">157</div><div class="oc-round">R14</div><div class="oc-gap num">gap 23</div></div><div class="oc-cell oc-short"><div class="oc-pick num">180</div><div class="oc-round">R15</div><div class="oc-gap num">gap 1</div></div><div class="oc-cell oc-end"><div class="oc-pick num">181</div><div class="oc-round">R16</div><div class="oc-gap num">END</div></div></div></div><div class="oc-section"><div class="oc-h">The rules</div><ul class="oc-rules"><li>Rounds 1, 3, 5 … 15 (gap 1): take the best player</li><li>Rounds 2, 4, 6 … 14 (gap 23): take the one that will be gone</li><li>You pick in PAIRS — plan two picks at once</li><li>Never chase a run — a run makes the other positions cheaper</li><li>K and DST at picks 180 and 181, never earlier</li></ul></div><div class="oc-section"><div class="oc-h">Emergency procedures</div><ol class="oc-emergency"><li><b>Shortlist blank / engine error</b> → open PLAN B: the printed tier sheet on-screen, drafted players struck through. Keep drafting from tiers.</li><li><b>App or iPad dead</b> → this card + Big Board + Blank Board. Strike names by pen; runs show up as streaks on the blank board.</li><li><b>Sync dot grey</b> → sync died, nothing else changed. Tap picks in manually; re-align with the Pick # stepper — two taps.</li><li><b>Looked away N picks</b> → Catch-up mode: multi-select everyone gone, one commit, in ADP order.</li><li><b>Mis-tap</b> → UNDO, top bar, always enabled. Never rebuild state from memory — read the pick log.</li><li><b>On the clock and frozen</b> → best remaining tier letter at the thinnest position. No K/DST before pick 180.</li></ol></div><div class="oc-section"><div class="oc-h">Notes</div><div class="oc-notes"></div></div><footer class="sheet-foot">snapshot 89e9f87 · 2026-07-27 · slot 12 · 12-team half-PPR · p1/1 · S1</footer></section> </body></html>

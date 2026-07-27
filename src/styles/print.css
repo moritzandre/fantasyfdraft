@@ -107,6 +107,18 @@ html.paper-letter .sheet {
 .tier-d { background: var(--tier-d-bg); color: var(--tier-d-fg); border-left: var(--tier-d-border) solid #000; }
 .tier-e { background: var(--tier-e-bg); color: var(--tier-e-fg); border-left: var(--tier-e-border) solid #000; }
 .tier-f { background: var(--tier-f-bg); color: var(--tier-f-fg); border-left: var(--tier-f-border) solid #000; }
+/* G/H extend the ramp for deep Ckmeans tier counts. tokens.css owns A–F (the
+   app never renders past F); the extension lives here, print-only, continuing
+   the same luminance ramp + max border weight. */
+.tier-g { background: oklch(0.30 0.03 250); color: #fff; border-left: 3.5pt solid #000; }
+.tier-h { background: oklch(0.26 0.02 250); color: #fff; border-left: 3.5pt solid #000; }
+
+/* 45° hatch for print cells (sub-45-reception RBs, bye cells) — light enough
+   that 6.5–8pt digits stay legible on top of it, and never color-only. */
+.hatch45 {
+  background-image: repeating-linear-gradient(
+    45deg, transparent 0 2.5px, rgba(0, 0, 0, 0.2) 2.5px 3.5px);
+}
 
 /* Position: border STYLE under the pos-rank cell, hue as decoration only
    (double needs ≥2.5pt to survive rasterization as two lines). */
@@ -127,9 +139,10 @@ html.paper-letter .sheet {
 
 /* ── S4/S5 Master Big Board — 4 columns × 50 rows per page ───────────────────
    Column width: (210 − 8 padding − 3×1.5 gaps) / 4 = 49.4mm. Fixed cells sum
-   to ~40.9mm; the name takes the rest (~8.5mm ≈ 8 narrow chars — "Gibbs, J."
-   just clips; the Phase 1 laser print adjudicates this density, and the 8mm
-   pen checkbox is the knob to negotiate if names must win). */
+   to ~37.9mm; the name takes the rest (~11.5mm ≈ 11 narrow chars). The Phase 1
+   laser proof found "Gibbs, J." clipping at the original 8mm pen cell, so the
+   checkbox cell was shrunk to 5mm (the box itself stays 3.4mm — pen-sized)
+   and the 3mm went to the name. */
 .bb-grid {
   display: grid; /* explicit grid, never column-count */
   grid-template-columns: repeat(4, 1fr);
@@ -138,7 +151,7 @@ html.paper-letter .sheet {
 .bb-row {
   display: grid;
   /*                    rank  T    name pos    tm     bye    proj   vbd    adp    ±   ✓  */
-  grid-template-columns: 4mm 2.8mm 1fr 4.6mm 4.4mm 2.7mm 4.4mm 3.9mm 4.1mm 2mm 8mm;
+  grid-template-columns: 4mm 2.8mm 1fr 4.6mm 4.4mm 2.7mm 4.4mm 3.9mm 4.1mm 2mm 5mm;
   align-items: center;
   font-size: 8.5pt;
   line-height: 1.15;
@@ -171,7 +184,7 @@ html.paper-letter .sheet {
 .bb-pos { text-align: left; padding-left: 0.4mm; } /* daylight after the clipped name */
 .bb-num { text-align: right; padding-left: 0.3mm; padding-right: 0.5mm; }
 .bb-arrow { text-align: center; font-size: 7pt; }
-.bb-cb { display: flex; justify-content: center; } /* 8mm pen cell */
+.bb-cb { display: flex; justify-content: center; } /* 5mm pen cell */
 .bb-cb > span {
   width: 3.4mm;
   height: 3.4mm;
@@ -196,3 +209,267 @@ html.paper-letter .sheet {
   font-weight: 400;
   color: #555;
 }
+
+/* ── Landscape sheets (S12 bye grid, S13 blank board) ─────────────────────────
+   Safe intersection flips to 279.4 × 210mm; the paper-* classes recenter:
+     A4 landscape     297 × 210   → (297 − 279.4)/2 = 8.7mm left offset
+     Letter landscape 279.4 × 215.9 → (215.9 − 210)/2 = 2.9mm top offset
+   The page's inline script injects `@page { size: … landscape }`. */
+.sheet.landscape {
+  width: 279.4mm;
+  height: 210mm;
+}
+html.paper-a4 .sheet.landscape { margin: 0 0 0 8.7mm; }
+html.paper-letter .sheet.landscape { margin: 2.9mm 0 0 0; }
+
+/* Sheet rows that may never straddle anything (single-page sheets clip). */
+.oc-cell, .tc-row, .tf-row, .hc-row, .bg-row, .blk-row {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* ── S1 Ops Card — portrait, 11pt base, THE RULES at 14pt ────────────────── */
+.oc { font-size: 11pt; }
+.oc-section { margin-top: 3.5mm; }
+.oc-h {
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #333;
+  border-bottom: var(--rule-hairline);
+  margin-bottom: 1.5mm;
+}
+.oc-league { font-size: 9.5pt; line-height: 1.45; }
+.oc-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1.2mm; }
+.oc-cell { border: 0.75pt solid #000; text-align: center; padding-top: 0.8mm; }
+.oc-pick { font-size: 16pt; font-weight: 700; line-height: 1.05; }
+.oc-round { font-size: 7.5pt; color: #333; }
+.oc-gap { font-size: 7.5pt; font-weight: 700; margin-top: 0.8mm; padding: 0.5mm 0; }
+.oc-short .oc-gap { background: #e8e8e8; }         /* short gap → light band */
+.oc-long .oc-gap { background: #3a3a3a; color: #fff; } /* long gap → dark band */
+.oc-end .oc-gap { color: #666; }
+.oc-rules { list-style: none; }
+.oc-rules li {
+  font-size: 14pt; /* THE RULES — readable from arm's length on the clock */
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 1.2mm 0 1.2mm 5mm;
+  border-left: 2.25pt solid #000;
+  margin: 1.2mm 0;
+}
+.oc-emergency { font-size: 9pt; line-height: 1.35; margin-left: 5mm; }
+.oc-emergency li { margin: 0.7mm 0; }
+.oc-notes { height: 60mm; border: 0.75pt solid #000; }
+
+/* ── S6–S9 Tier Sheets — per-tier cards, discriminator column ────────────── */
+.ts .tc-row {
+  display: grid;
+  /*                    posRk name  tm   bye  pts   adp  disc   ✗  */
+  grid-template-columns: 10mm 1fr 8mm 6mm 9mm 9mm 13mm 6mm;
+  align-items: center;
+  font-size: 8pt;
+  line-height: 1.22;
+  border-bottom: 0.5pt solid #bbb;
+  padding: 0.2mm 0 0.2mm 1.5mm;
+}
+.ts .tier-card { border: 0.75pt solid #000; margin-bottom: 1.4mm; }
+.ts .tier-card .tc-row:last-of-type { border-bottom: none; }
+.tc-head {
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.7mm 1.5mm;
+  border-bottom: var(--rule-hairline);
+}
+.tc-hd {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #333;
+  border-bottom: none;
+}
+.tc-name { overflow: hidden; white-space: nowrap; padding-right: 0.5mm; }
+.tc-num { text-align: right; padding-right: 1mm; }
+.tc-cb > span { display: block; width: 3mm; height: 3mm; border: 0.5pt solid #000; margin: 0 auto; background: #fff; }
+.tc-cbh { text-align: center; }
+.tc-break {
+  /* TierSep < 1.0 boundary — dashed weak-break rule between cards */
+  border-top: var(--rule-weak-break);
+  font-size: 6.5pt;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.4mm 0 1mm 2mm;
+  margin-top: -1.4mm; /* sit on the card gap */
+}
+.tc-more { font-size: 6.5pt; color: #555; padding: 0.5mm 1.5mm; font-style: italic; }
+.kdst-block { border: 0.75pt solid #000; margin-top: 2mm; }
+.kdst-row {
+  display: grid;
+  grid-template-columns: 6mm 1fr 11mm 6mm 1fr 11mm;
+  font-size: 8pt;
+  line-height: 1.25;
+  align-items: center;
+  border-bottom: 0.5pt solid #bbb;
+  padding: 0.2mm 0 0.2mm 1.5mm;
+}
+.kdst-row:last-child { border-bottom: none; }
+
+/* ── S10 Targets / Fades / Late Darts — three columns ────────────────────── */
+.tf-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 3mm; }
+.tf-col-h {
+  font-size: 8.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1pt solid #000;
+  padding-bottom: 0.5mm;
+  margin: 1mm 0;
+}
+.tf-row {
+  display: grid;
+  grid-template-columns: 1fr 9mm 8mm 8mm;
+  font-size: 8pt;
+  line-height: 1.25;
+  border-bottom: 0.5pt solid #bbb;
+  padding: 0.4mm 0;
+  align-items: center;
+}
+.tf-name { overflow: hidden; white-space: nowrap; }
+.tf-delta { text-align: right; padding-right: 0.5mm; font-weight: 700; }
+.tf-reason {
+  /* the free-text tag reason typed in prep — printed verbatim */
+  grid-column: 1 / -1;
+  font-size: 6.5pt;
+  font-style: italic;
+  color: #333;
+}
+.tf-gh {
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: #e8e8e8;
+  padding: 0.4mm 1mm;
+  margin-top: 1mm;
+}
+.tf-writein { height: 6mm; border-bottom: 0.5pt solid #000; } /* pen rows */
+.tf-arb { margin-top: 3mm; }
+.tf-arb-list { font-size: 8pt; line-height: 1.5; }
+
+/* ── S11 Handcuff Map ────────────────────────────────────────────────────── */
+.hc-wrap { display: grid; grid-template-columns: 3fr 2fr; column-gap: 4mm; }
+.hc-row {
+  display: grid;
+  grid-template-columns: 9mm 1.1fr 1fr 1fr;
+  font-size: 8.5pt;
+  line-height: 1.3;
+  align-items: center;
+  border-bottom: 0.5pt solid #bbb;
+  padding: 0.5mm 0;
+}
+.hc-hd, .hc-hd2 {
+  font-size: 7pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #333;
+  border-bottom: 1pt solid #000;
+}
+.hc-hd2 { padding-bottom: 0.5mm; margin-bottom: 0.5mm; }
+.hc-adp { font-size: 7pt; color: #333; }
+.hc-strip { font-size: 8.5pt; }
+.hc-strip ul { list-style: none; }
+.hc-strip li { border-bottom: 0.5pt solid #bbb; padding: 0.9mm 0; }
+.hc-blank { margin-top: 4mm; }
+.hc-brow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 24mm;
+  height: 8mm;
+  border-bottom: 0.5pt solid #000;
+}
+.hc-brow > span { border-right: 0.5pt solid #999; padding: 0.5mm 1mm; }
+.hc-bhd {
+  height: auto;
+  font-size: 7pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-top: 1pt solid #000;
+  border-bottom: 1pt solid #000;
+}
+
+/* ── S12 Bye & SoS Grid — landscape; the working grid shares this template so
+   its columns ALIGN with the week columns above ─────────────────────────── */
+.bg-row {
+  display: grid;
+  grid-template-columns: 10mm 9mm repeat(18, 1fr) 9mm 9mm;
+  align-items: stretch;
+}
+.bg-hd {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #333;
+  text-align: center;
+  border-bottom: var(--rule-hairline);
+}
+.bg-team { font-size: 7pt; font-weight: 700; line-height: 3.5mm; }
+.bg-sosnum, .bg-count { font-size: 6pt; line-height: 3.5mm; text-align: right; padding-right: 0.8mm; }
+.bg-count { font-weight: 700; }
+.bg-cell {
+  height: 3.5mm;
+  border: 0.5pt solid #ccc;
+  font-size: 6pt;
+  font-weight: 700;
+  text-align: center;
+  line-height: 3.5mm;
+}
+.bg-bye {
+  background-image: repeating-linear-gradient(
+    45deg, transparent 0 2.5px, rgba(0, 0, 0, 0.35) 2.5px 3.5px);
+}
+.sos-mid { background-color: #ececec; }
+.sos-hard { background-color: #d7d7d7; }
+.bgw { margin-top: 3mm; }
+.bgw-label { font-size: 6.5pt; font-weight: 700; line-height: 4.6mm; }
+.bgw-row .bgw-cell { height: 4.6mm; border: 0.5pt solid #999; }
+
+/* ── S13 Blank Draft Board — landscape, EXPLICIT mm cells ────────────────────
+   21mm wide × 11mm tall (16 rounds × 15mm = 240mm cannot fit the 210mm-high
+   landscape safe box; 11mm keeps it one page and still takes a surname). */
+.blk-hrow { display: grid; height: 7mm; }
+.blk-hcell {
+  border: 0.5pt solid #000;
+  font-size: 6.5pt;
+  padding: 0.4mm 0.8mm;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.8mm;
+}
+.blk-hcell b { font-size: 7pt; }
+.blk-slotno { color: #666; font-size: 6pt; }
+.blk-line { flex: 1; border-bottom: 0.5pt solid #000; } /* opponent name line */
+.blk-row { display: grid; height: 11mm; }
+.blk-cell { border: 0.5pt solid #666; position: relative; background: #fff; }
+.blk-mine { background: #ececec; border: 1pt solid #000; } /* my column tinted + outlined */
+.blk-pick {
+  /* every one of MY cells preprinted with its overall pick number */
+  position: absolute;
+  top: 0.3mm;
+  right: 0.8mm;
+  font-size: 6.5pt;
+  font-weight: 700;
+}
+.blk-rlabel {
+  border: 0.5pt solid #000;
+  font-size: 6.5pt;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.blk-arrow { font-size: 8pt; } /* snake direction per round row */
+.blk-corner { border: none; }

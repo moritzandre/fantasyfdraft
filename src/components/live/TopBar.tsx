@@ -1,13 +1,14 @@
 // TopBar.tsx — 72px sticky, safe-area aware. Round·Pick · on-the-clock
 // banner (grey / amber "2 away" / green YOU ARE UP) · "you pick in N" · sync
-// dot (MANUAL for now) · UNDO 56px always-enabled (tap = UNDO, long-press
-// 500ms = pick log) · search (17px, debounced downstream) · Pick# stepper —
-// the two-tap desync fix.
+// dot (LIVE green / MANUAL grey / OFFLINE red-hatched — tap opens #/sync) ·
+// UNDO 56px always-enabled (tap = UNDO, long-press 500ms = pick log) ·
+// search (17px, debounced downstream) · Pick# stepper — the two-tap desync fix.
 
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { roundForPick } from '../../../engine/picks.js';
 import type { DraftState, Store } from '../../state/store';
 import { selectors } from '../../state/store';
+import { useSyncInfo } from './SyncPanel';
 
 const LONG_PRESS_MS = 500;
 
@@ -66,6 +67,23 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
     if (pressTimer.current) clearTimeout(pressTimer.current);
   };
 
+  // Sync dot — three states, never colour-only (label text + hatch pattern):
+  // LIVE solid green · MANUAL grey · OFFLINE red-hatched. Tap opens SyncPanel.
+  const sync = useSyncInfo();
+  let dotLabel = 'MANUAL';
+  let dotClass = 'border-app-border bg-app-border';
+  let dotStyle: Record<string, string> | undefined;
+  if (sync.status === 'live') {
+    dotLabel = 'LIVE';
+    dotClass = 'border-emerald-600 bg-emerald-500';
+  } else if (sync.status === 'error') {
+    dotLabel = 'OFFLINE';
+    dotClass = 'border-red-600';
+    dotStyle = {
+      backgroundImage: 'repeating-linear-gradient(45deg,#dc2626 0 2px,transparent 2px 4px)',
+    };
+  }
+
   return (
     <header class="lv-topbar flex items-center gap-2 px-2">
       <div class="num shrink-0 px-1 text-sm leading-tight">
@@ -81,10 +99,18 @@ export default function TopBar({ s, store }: { s: DraftState; store: Store }) {
         <span class="truncate">{clockText}</span>
       </div>
 
-      <div class="flex shrink-0 flex-col items-center px-1" title="sync source">
-        <span class="h-3 w-3 rounded-full border border-app-border bg-app-border" />
-        <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">MANUAL</span>
-      </div>
+      <button
+        type="button"
+        class="flex h-14 min-w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-app-border bg-app-surface px-1"
+        onClick={() => {
+          location.hash = '#/sync';
+        }}
+        title="Sleeper sync — tap to configure"
+        aria-label={`Sync: ${dotLabel}`}
+      >
+        <span class={`h-3 w-3 rounded-full border ${dotClass}`} style={dotStyle} />
+        <span class="mt-0.5 text-[10px] tracking-wide text-app-dim">{dotLabel}</span>
+      </button>
 
       <input
         type="search"
