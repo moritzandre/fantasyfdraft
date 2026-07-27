@@ -1,0 +1,26 @@
+{
+  "_shape": {
+    "_doc": [
+      "User-editable layer read by the app at runtime and merged over",
+      "board.json. Ships empty; edited in the Prep > Overrides tab (or by",
+      "hand). Never written by the pipeline — a rebuild must not clobber",
+      "your prep work.",
+      "",
+      "handcuffs:  [[starterIdx, handcuffIdx], ...] — board.json idx pairs;",
+      "            drives the S11 handcuff map and the stack/cannibal terms.",
+      "projections: { \"<idx>\": {halfPpr, sigmaProj} } — manual projection",
+      "            overrides (e.g. a FantasyPros CSV drop-in); any field",
+      "            present replaces the board value, others keep it.",
+      "adp:        { \"<idx>\": {mu, sigmaFinal} } — manual ADP overrides.",
+      "tags:       { \"<idx>\": {tag: \"target|value|avoid|never\",",
+      "            reason: \"free text — printed verbatim on sheet S10\"} }",
+      "stackBonus: QB+WR stack bonus in points; defaults 0 (variance play,",
+      "            not a mean play — plan, 'Handcuffs, byes, stacks')."
+    ]
+  },
+  "handcuffs": [],
+  "projections": {},
+  "adp": {},
+  "tags": {},
+  "stackBonus": 0
+}
