@@ -36,14 +36,20 @@ export function gapsAfter(picks) {
   return gaps;
 }
 
-/** κ_r — cost-of-waiting weight for the pick in `round`.
-    1.0 before a short gap (odd rounds for back-half slots), kappaLongGap
-    (default 1.3) before a long gap. Getting this inverted makes the tool most
-    cautious exactly when it should be most aggressive — see the unit test. */
-export function kappaForRound(round, { slot, teams, kappaLongGap = 1.3 }) {
-  const backHalf = slot > (teams + 1) / 2; // slot 8 of 12: true
-  const longGapNext = backHalf ? round % 2 === 0 : round % 2 === 1;
-  return longGapNext ? kappaLongGap : 1.0;
+/** κ_r — cost-of-waiting weight for the pick in `round`, for ANY slot.
+    General rule: the long-side wait is a gap that EXCEEDS N (the two gaps
+    always sum to 2N, so at most one can). κ = kappaLongGap before a long-side
+    wait, 1.0 otherwise. Reproduces slot 8's 9/15 ⇒ 1.0/1.3 exactly; gives
+    turn slots (1/N) the right 1/2N−1 treatment; mid slots with near-equal
+    gaps (e.g. slot 6 of 12: 13/11) get only the mild correct asymmetry.
+    Getting the direction inverted makes the tool most cautious exactly when
+    it should be most aggressive — see the unit test. */
+export function kappaForRound(round, { slot, teams, rounds = 16, snake = true, kappaLongGap = 1.3 }) {
+  if (!snake) return 1.0; // linear drafts: every gap is N — no asymmetry
+  if (round >= rounds) return 1.0; // no next pick, CoW is moot
+  const here = pickNumber(round, slot, teams, snake);
+  const next = pickNumber(round + 1, slot, teams, snake);
+  return next - here > teams ? kappaLongGap : 1.0;
 }
 
 /** Which team (1-based slot) owns overall pick `n`. */

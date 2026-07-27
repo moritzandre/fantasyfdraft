@@ -28,11 +28,30 @@ test('10-team slot-8 ladder — the mini-turn league', () => {
 
 test('κ_r: even rounds carry the long-gap weight at slot 8 — NOT odd', () => {
   // The single most consequential sign in the engine. Odd-round picks are
-  // followed by only 8 opponent picks (short); even-round by 14 (long).
+  // followed by a 9-gap (short); even-round by a 15-gap (long).
   assert.equal(kappaForRound(1, LEAGUE), 1.0);
   assert.equal(kappaForRound(2, LEAGUE), 1.3);
   assert.equal(kappaForRound(3, LEAGUE), 1.0);
   assert.equal(kappaForRound(4, LEAGUE), 1.3);
+});
+
+test('κ_r generalizes to every slot: turn, front, mid', () => {
+  // Slot 1: R1 pick 1 → R2 pick 24 is a 23-gap (long); R2 24 → R3 25 is 1 (short).
+  const slot1 = { teams: 12, slot: 1, rounds: 16, kappaLongGap: 1.3 };
+  assert.equal(kappaForRound(1, slot1), 1.3);
+  assert.equal(kappaForRound(2, slot1), 1.0);
+  // Slot 12 (the other turn): 12 → 13 is 1 (short); 13 → 36 is 23 (long).
+  const slot12 = { teams: 12, slot: 12, rounds: 16, kappaLongGap: 1.3 };
+  assert.equal(kappaForRound(1, slot12), 1.0);
+  assert.equal(kappaForRound(2, slot12), 1.3);
+  // Slot 6 (mid): gaps 13/11 — 13 > 12 is the (mildly) long side.
+  const slot6 = { teams: 12, slot: 6, rounds: 16, kappaLongGap: 1.3 };
+  assert.equal(kappaForRound(1, slot6), 1.3); // 6 → 19: gap 13
+  assert.equal(kappaForRound(2, slot6), 1.0); // 19 → 30: gap 11
+  // Last round: no next pick, κ is moot.
+  assert.equal(kappaForRound(16, LEAGUE), 1.0);
+  // Linear draft: every gap is exactly N — no asymmetry anywhere.
+  assert.equal(kappaForRound(2, { ...LEAGUE, snake: false }), 1.0);
 });
 
 test('slotForPick round-trips the full 192-pick draft', () => {
