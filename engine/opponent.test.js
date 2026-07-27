@@ -243,6 +243,134 @@ test('archetypes: unknown name in the mix throws at ctx creation (fail fast)', (
   ));
 });
 
+// ── Realism knobs (additive — code defaults are exact legacy no-ops) ────────
+
+test('realism: default params (gamma 1, earlyTau off) sample bit-identically to legacy', () => {
+  // Same pattern as the determinism test: explicit no-op params must yield
+  // the SAME 192-pick sequence as absent params, with archetype multiplier
+  // tables active (robust_rb carries m=1.25) so the gamma-1 path is hit.
+  const runOnce = (params) => {
+    const { sim } = freshSim(
+      { ...NEUTRAL_OPP, archetypes: { mix: { balanced: 0.6, robust_rb: 0.4 } } },
+      params,
+    );
+    const rng = xorshift128plus(777);
+    sim.reset();
+    sim.drawSeatState(rng);
+    const rec = [];
+    sim.run(1, 192, rng, { record: rec });
+    return rec;
+  };
+  assert.deepEqual(runOnce({}), runOnce({ archetypeGamma: 1, earlyTauThrough: 0, earlyTauScale: 1 }));
+});
+
+test('realism: archetypeGamma tilts the archetype distribution monotonically', () => {
+  const wrTilt = defineStrategy({
+    name: 'wr_tilt_g',
+    multipliers: { WR: [{ from: 1, to: 4, m: 1.2 }] },
+  });
+  const board = synthBoard();
+  const wrMassAt = (gamma) => {
+    const { sim } = freshSim(
+      { ...NEUTRAL_OPP, archetypes: { mix: { wr_tilt_g: 1 } } },
+      { strategies: { wr_tilt_g: wrTilt }, archetypeGamma: gamma },
+    );
+    sim.reset();
+    sim.drawSeatState(xorshift128plus(4)); // {x: 1} mix ⇒ deterministic assign
+    return sim.pickDistribution(1, 1, { jitter: 1 })
+      .filter(({ idx }) => board.players[idx].pos === 'WR')
+      .reduce((a, d) => a + d.p, 0);
+  };
+  const m1 = wrMassAt(1);
+  const m2 = wrMassAt(2);
+  const m4 = wrMassAt(4);
+  assert.ok(m1 < m2 && m2 < m4, `WR mass must rise with gamma: ${m1} → ${m2} → ${m4}`);
+});
+
+test('realism: earlyTau sharpens round 1, leaves round 5 untouched', () => {
+  const dist = (params, round) => {
+    const { sim } = freshSim(NEUTRAL_OPP, params);
+    sim.reset();
+    return sim.pickDistribution(1, round, { jitter: 1 });
+  };
+  const base1 = dist({}, 1);
+  const sharp1 = dist({ earlyTauThrough: 2, earlyTauScale: 0.5 }, 1);
+  assert.ok(sharp1[0].p > base1[0].p + 0.01,
+    `top-1 must rise: ${base1[0].p.toFixed(4)} → ${sharp1[0].p.toFixed(4)}`);
+  assert.deepEqual(dist({ earlyTauThrough: 2, earlyTauScale: 0.5 }, 5), dist({}, 5));
+});
+
+// ── Per-seat fixed archetypes ───────────────────────────────────────────────
+
+const fixSeat = (seatNo, name) => ({
+  seats: NEUTRAL_OPP.seats.map((x) => (x.seat === seatNo ? { ...x, archetype: name } : x)),
+});
+
+function runRoom(opponents, seed, upTo = 192) {
+  const { sim } = freshSim(opponents);
+  const rng = xorshift128plus(seed);
+  sim.reset();
+  sim.drawSeatState(rng);
+  const rec = [];
+  sim.run(1, upTo, rng, { record: rec });
+  const names = Array.from({ length: 12 }, (_, i) => sim.seatArchetypeName(i + 1));
+  return { rec, names, sim };
+}
+
+test('fixed archetype: no mix — balanced fixed seat reported, room picks unchanged', () => {
+  // 'balanced' is the identity strategy AND fixed-only rooms draw nothing —
+  // the whole 192-pick sequence must match the no-fixed baseline exactly.
+  const base = runRoom(NEUTRAL_OPP, 555);
+  const fixed = runRoom(fixSeat(5, 'balanced'), 555);
+  assert.deepEqual(fixed.rec, base.rec);
+  assert.equal(fixed.names[4], 'balanced'); // seatArchetypeName reports it
+  assert.equal(fixed.names[0], null);
+  assert.deepEqual(base.names, Array(12).fill(null));
+});
+
+test('fixed archetype: no mix — zero_rb seat honors its constraints every draft', () => {
+  const board = synthBoard();
+  const { sim } = freshSim(fixSeat(3, 'zero_rb_mod'));
+  const rng = xorshift128plus(9);
+  for (let d = 0; d < 20; d++) {
+    sim.reset();
+    sim.drawSeatState(rng);
+    const rec = [];
+    sim.run(1, 36, rng, { record: rec }); // rounds 1-3
+    rec.forEach((idx, k) => {
+      if (slotForPick(k + 1, 12, true) === 3) assert.notEqual(board.players[idx].pos, 'RB');
+    });
+    assert.equal(sim.seatArchetypeName(3), 'zero_rb_mod');
+    assert.equal(sim.seatArchetypeName(4), null);
+  }
+});
+
+test('fixed archetype: with a mix, the fixed seat consumes its draw — seeds hold', () => {
+  // mix {balanced: 1} assigns balanced everywhere regardless of the uniform,
+  // so fixing seat 5 to balanced changes NOTHING iff the fixed seat still
+  // consumed its mix draw (a skipped draw would shift the pick stream).
+  const mixed = { ...NEUTRAL_OPP, archetypes: { mix: { balanced: 1 } } };
+  const base = runRoom(mixed, 4242);
+  const fixed = runRoom({ ...fixSeat(5, 'balanced'), archetypes: { mix: { balanced: 1 } } }, 4242);
+  assert.deepEqual(fixed.rec, base.rec);
+  assert.equal(fixed.names[4], 'balanced');
+});
+
+test('fixed archetype: overrides the mix, even for names OUTSIDE the mix', () => {
+  const board = synthBoard();
+  const opp = { ...fixSeat(3, 'zero_rb_mod'), archetypes: { mix: { balanced: 1 } } };
+  const { names, rec } = runRoom(opp, 31, 36);
+  assert.equal(names[2], 'zero_rb_mod');
+  assert.equal(names[3], 'balanced');
+  rec.forEach((idx, k) => {
+    if (slotForPick(k + 1, 12, true) === 3) assert.notEqual(board.players[idx].pos, 'RB');
+  });
+});
+
+test('fixed archetype: unknown name throws at ctx build (fail fast)', () => {
+  assert.throws(() => freshSim(fixSeat(2, 'not_a_strategy')));
+});
+
 test('params: overrides cascade defaults ← opponents.params ← explicit', () => {
   const ctx = makeOpponentCtx(
     synthBoard(), LEAGUE,

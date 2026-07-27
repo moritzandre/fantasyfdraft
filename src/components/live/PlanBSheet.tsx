@@ -57,6 +57,10 @@ export default function PlanBSheet({ s, store, board }: { s: DraftState; store: 
           B&W
         </button>
       </div>
+      <p class="border-b border-app-border bg-app-surface px-3 py-2 text-sm text-app-dim">
+        Print-grade tier board — engine-free fallback. Drafted players strike through as picks
+        are recorded.
+      </p>
       <div ref={host}>
         <BigBoard board={board} league={s.league} />
       </div>

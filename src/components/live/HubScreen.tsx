@@ -50,6 +50,11 @@ const TOOLS: Array<[string, string, string]> = [
   // NO trailing slash: with Astro trailingSlash 'ignore' the SW precaches the
   // page under the key 'season', and only the slash-less URL hits it offline.
   [import.meta.env.BASE_URL + 'season', 'Season', 'lineup coach · waivers · Trade Desk'],
+  // Season deep links — same slash-less base + '#/…' hash convention as the
+  // Season card above, so the SW's 'season' precache key still matches offline.
+  [import.meta.env.BASE_URL + 'season#/coach', 'Lineup Coach', 'weekly start/sit with reasons'],
+  [import.meta.env.BASE_URL + 'season#/waivers', 'Waivers', 'pickup targets ranked by roster need'],
+  [import.meta.env.BASE_URL + 'season#/trade', 'Trade Desk', 'sandbox trade evaluator — works with zero sync'],
   ['#/prep', 'Prep', 'tiers · tags · overrides · strategy · rehearsal'],
   ['#/sim', 'Sim Lab', 'strategy sweeps + mock calibration, in-app'],
   ['#/league', 'League', 'all 12 rosters · live draft grid'],

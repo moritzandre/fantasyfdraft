@@ -20,6 +20,7 @@ import { selectors } from '../../state/store';
 import type { UiState } from '../../state/store';
 import { createMockDriver } from '../../state/mock';
 import type { MockDriver } from '../../state/mock';
+import { loadOpponents } from '../../state/opponents';
 import HoldButton from '../live/HoldButton';
 import type { PrepCtx } from './PrepScreen';
 
@@ -42,7 +43,9 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
       fetch(import.meta.env.BASE_URL + 'data/' + file)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null); // neutral defaults still work offline
-    Promise.all([grab('opponents.json'), grab('strategies.json')]).then(([opp, strat]) => {
+    // Opponents come through loadOpponents so the Sim Lab Room editor's
+    // local patch (dp:opponents-local:v1) applies to rehearsal too.
+    Promise.all([loadOpponents(), grab('strategies.json')]).then(([opp, strat]) => {
       if (!alive) return;
       // Invalid custom specs are dropped with a warning, never fatal
       // (strategies.json contract) — archetype resolution falls back below.
@@ -73,11 +76,23 @@ export default function RehearsalTab({ ctx }: { ctx: PrepCtx }) {
   const driver = useMemo<MockDriver | null>(() => {
     if (!room) return null;
     const opp = room.opponents as Record<string, unknown> | null;
+    // "no archetypes" must strip the per-seat FIXED archetypes too — an
+    // unresolvable strategy name would otherwise still throw at ctx build.
+    const strip = (o: Record<string, unknown> | null) =>
+      o
+        ? {
+            ...o,
+            archetypes: null,
+            seats: ((o.seats as Array<Record<string, unknown>>) ?? []).map(
+              ({ archetype: _drop, ...rest }) => rest,
+            ),
+          }
+        : null;
     const attempts: Array<[string, unknown, unknown]> = [
       ['full', derived, opp],
-      ['no archetypes', derived, opp ? { ...opp, archetypes: null } : null],
+      ['no archetypes', derived, strip(opp)],
       ['raw board', board, opp],
-      ['raw board, no archetypes', board, opp ? { ...opp, archetypes: null } : null],
+      ['raw board, no archetypes', board, strip(opp)],
     ];
     for (const [label, b, o] of attempts) {
       try {

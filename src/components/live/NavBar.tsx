@@ -18,9 +18,11 @@ export default function NavBar({ route }: { route: string }) {
     { href: '#/hub', label: 'Hub', glyph: '⌂' },
     { href: '#/live', label: 'Draft', glyph: '▶' },
     { href: '#/league', label: 'League', glyph: '⚏' },
-    { href: '#/prep', label: 'Prep', glyph: '✎' },
     { href: '#/sim', label: 'Sim', glyph: '∿' },
     { href: base + 'season', label: 'Season', glyph: '⚑', external: true },
+    // Prep moved off the bar — it stays one tap away via More and the Hub;
+    // More is the full directory, so EVERY screen is reachable from the bar.
+    { href: '#/more', label: 'More', glyph: '▤' },
   ];
   return (
     <nav

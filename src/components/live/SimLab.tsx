@@ -9,6 +9,13 @@
 //      unsplit run), merges + summarizes at the end, and persists the
 //      artifact to localStorage dp:evaluation:v1 (StrategyTab reads it when
 //      the buildHash matches). Cancel = terminate the worker.
+//   R. ROOM — in-UI editor for the practice opponent room: the archetype
+//      MIX (weights over built-ins + custom strategies), per-seat name /
+//      FIXED archetype / ADP discipline. Saves a LOCAL patch
+//      (dp:opponents-local:v1, src/state/opponents.ts) deep-merged over
+//      public/data/opponents.json by loadOpponents() — practice mocks,
+//      rehearsal and sweeps pick it up on their next load; the offline
+//      mc.json keeps using the committed file until simulate.mjs re-runs.
 //   B. MOCK CALIBRATION — fetch my completed Sleeper mock drafts (account
 //      from dp:account:v1 or a username input), keep slim {draft, picks}
 //      pairs in dp:mocks:v1 (cap 20, deduped), replay them through
@@ -28,8 +35,13 @@ import { fmt1 } from '../../../shared/format.js';
 import type { Board, DraftState, Store } from '../../state/store';
 import { loadStrategies, strategyList } from '../../state/strategies';
 import type { StrategyRegistry } from '../../state/strategies';
-import { loadOpponents } from '../../state/opponents';
-import type { OpponentsFile } from '../../state/opponents';
+import {
+  invalidateOpponents,
+  loadLocalOpponents,
+  loadOpponents,
+  saveLocalOpponents,
+} from '../../state/opponents';
+import type { OpponentsFile, OpponentsLocalPatch } from '../../state/opponents';
 import { OPP_PARAMS_KEY, loadOppParams } from '../../state/mock';
 import {
   fetchDraft,
@@ -152,6 +164,113 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
   // Bumped after Apply/Clear so the loadOppParams re-read below re-renders.
   const [, setAppliedRev] = useState(0);
   const appliedParams = loadOppParams(storage());
+
+  // ── R. Room editor state (archetype mix + per-seat table) ────────────────
+  interface SeatRow {
+    seat: number;
+    name: string;
+    disc: number;
+    archetype: string | null;
+  }
+  const [mixOff, setMixOff] = useState(false);
+  const [mixWeights, setMixWeights] = useState<Record<string, number> | null>(null);
+  const [seatRows, setSeatRows] = useState<SeatRow[] | null>(null);
+  const [roomNote, setRoomNote] = useState<string | null>(null);
+  const roomLocal = loadLocalOpponents(storage()) !== null;
+  const strategyNames = useMemo(() => strategies.map((m) => m.name), [strategies]);
+
+  /** (Re)initialize the editor from a merged room + the strategy list. */
+  const initRoom = (opp: OpponentsFile) => {
+    const mix = (opp.archetypes?.mix ?? null) as Record<string, number> | null;
+    const total = mix ? Object.values(mix).reduce((a, b) => a + (Number(b) || 0), 0) : 0;
+    const w: Record<string, number> = {};
+    for (const name of strategyNames) {
+      w[name] = mix && total > 0 && typeof mix[name] === 'number'
+        ? Math.max(0, Math.round((100 * mix[name]) / total))
+        : 0;
+    }
+    setMixWeights(w);
+    setMixOff(!mix || total <= 0);
+    setSeatRows(
+      Array.from({ length: l.teams }, (_, i) => {
+        const seat = i + 1;
+        const f = (opp.seats ?? []).find((x) => x.seat === seat);
+        return {
+          seat,
+          name: typeof f?.name === 'string' ? f.name : '',
+          disc: typeof f?.adpDiscipline === 'number' ? f.adpDiscipline : 0.5,
+          archetype: typeof f?.archetype === 'string' && f.archetype ? f.archetype : null,
+        };
+      }),
+    );
+  };
+
+  useEffect(() => {
+    if (!opponents || registry === null || seatRows !== null) return;
+    initRoom(opponents);
+  }, [opponents, registry]);
+
+  const bumpWeight = (name: string, delta: number) =>
+    setMixWeights((w) => (w ? { ...w, [name]: Math.min(100, Math.max(0, (w[name] ?? 0) + delta)) } : w));
+
+  const cycleSeatArch = (seat: number) =>
+    setSeatRows((rows) =>
+      rows
+        ? rows.map((r) => {
+            if (r.seat !== seat) return r;
+            const opts: Array<string | null> = [null, ...strategyNames];
+            const i = opts.indexOf(r.archetype);
+            return { ...r, archetype: opts[(i + 1) % opts.length] ?? null };
+          })
+        : rows,
+    );
+
+  const bumpDisc = (seat: number, delta: number) =>
+    setSeatRows((rows) =>
+      rows
+        ? rows.map((r) =>
+            r.seat === seat
+              ? { ...r, disc: Math.min(1, Math.max(0, Math.round((r.disc + delta) * 10) / 10)) }
+              : r,
+          )
+        : rows,
+    );
+
+  const setSeatName = (seat: number, name: string) =>
+    setSeatRows((rows) => (rows ? rows.map((r) => (r.seat === seat ? { ...r, name } : r)) : rows));
+
+  const saveRoom = () => {
+    if (!mixWeights || !seatRows) return;
+    const entries = Object.entries(mixWeights).filter(([, w]) => w > 0);
+    const total = entries.reduce((a, [, w]) => a + w, 0);
+    const patch: OpponentsLocalPatch = {
+      // Weights normalize on save (engine cdf normalizes again — harmless).
+      archetypes:
+        mixOff || total <= 0
+          ? null
+          : { mix: Object.fromEntries(entries.map(([n, w]) => [n, w / total])) },
+      seats: seatRows.map((r) => ({
+        seat: r.seat,
+        name: r.name,
+        adpDiscipline: Math.round(r.disc * 10) / 10,
+        archetype: r.archetype, // null clears the fixed strategy
+      })),
+    };
+    saveLocalOpponents(patch, storage());
+    invalidateOpponents();
+    loadOpponents().then(setOpponents);
+    setRoomNote('Room saved — practice mocks, rehearsal and new sweeps use it as they (re)load.');
+  };
+
+  const resetRoom = () => {
+    saveLocalOpponents(null, storage());
+    invalidateOpponents();
+    loadOpponents().then((o) => {
+      setOpponents(o);
+      initRoom(o); // re-seed the editor from the committed file
+    });
+    setRoomNote('Local room cleared — back to the committed opponents.json.');
+  };
 
   const toggleStrategy = (name: string) =>
     setSelected((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
@@ -535,6 +654,139 @@ export default function SimLab({ s, store, board }: { s: DraftState; store: Stor
               device (Strategy tab shows these numbers while the board build matches).
             </p>
             {renderResults(artifact)}
+          </>
+        )}
+      </section>
+
+      {/* ── R. Room editor ────────────────────────────────────────────── */}
+      <section class="mt-3 rounded-xl border border-app-border bg-app-surface p-3">
+        <h2 class="text-[17px] font-bold">
+          Room — who you practice against
+          {roomLocal && <span class="pl-2 text-xs font-bold text-accent">LOCAL EDITS ACTIVE</span>}
+        </h2>
+        <p class="pt-1 text-sm text-app-dim">
+          Applies to practice mocks and sweeps immediately; the offline mc.json uses the committed
+          file. The MIX draws one strategy per seat per draft; a seat with a fixed chip always
+          plays that strategy instead.
+        </p>
+
+        {!mixWeights || !seatRows ? (
+          <p class="pt-2 text-sm text-app-dim">Loading room…</p>
+        ) : (
+          <>
+            <div class="mt-2 flex items-center gap-2">
+              <span class="text-xs font-bold tracking-widest text-app-dim">ARCHETYPE MIX</span>
+              <button
+                type="button"
+                class={`min-h-14 shrink-0 rounded-lg border px-3 text-sm font-bold ${
+                  mixOff ? 'border-accent bg-accent/15' : 'border-app-border bg-app-bg text-app-dim'
+                }`}
+                onClick={() => setMixOff(!mixOff)}
+                title="No archetypes — tendency-only room"
+              >
+                {mixOff ? 'MIX OFF' : 'MIX ON'}
+              </button>
+            </div>
+            {!mixOff && (
+              <div class="mt-1 rounded-lg border border-app-border">
+                {strategies.map((m) => {
+                  const w = mixWeights[m.name] ?? 0;
+                  const total = Object.values(mixWeights).reduce((a, b) => a + b, 0);
+                  return (
+                    <div class="flex min-h-14 items-center gap-2 border-b border-app-border px-2 last:border-b-0">
+                      <span class="min-w-0 flex-1 truncate text-sm font-semibold">
+                        {m.label}
+                        {m.custom ? ' ✎' : ''}
+                      </span>
+                      <span class="num w-16 shrink-0 text-right text-xs text-app-dim">
+                        {w > 0 && total > 0 ? `${Math.round((100 * w) / total)}%` : '—'}
+                      </span>
+                      <button
+                        type="button"
+                        class="num h-14 min-w-14 shrink-0 rounded-lg border border-app-border bg-app-bg font-bold"
+                        onClick={() => bumpWeight(m.name, -5)}
+                      >
+                        −
+                      </button>
+                      <span class="num w-8 shrink-0 text-center font-bold">{w}</span>
+                      <button
+                        type="button"
+                        class="num h-14 min-w-14 shrink-0 rounded-lg border border-app-border bg-app-bg font-bold"
+                        onClick={() => bumpWeight(m.name, +5)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <p class="pt-3 text-xs font-bold tracking-widest text-app-dim">
+              SEATS — name · fixed archetype · ADP discipline (0 wild → 1 strict)
+            </p>
+            <div class="mt-1 overflow-x-auto rounded-lg border border-app-border">
+              {seatRows.map((r) => (
+                <div class="flex min-h-14 items-center gap-2 border-b border-app-border px-2 last:border-b-0">
+                  <span class="num w-7 shrink-0 text-right text-sm font-bold text-app-dim">
+                    {r.seat}
+                  </span>
+                  <input
+                    type="text"
+                    value={r.name}
+                    placeholder={r.seat === l.slot ? `T${r.seat} (you)` : `T${r.seat}`}
+                    class="h-14 w-32 min-w-0 flex-1 rounded-lg border border-app-border bg-app-bg px-2 text-[17px]"
+                    onInput={(e) => setSeatName(r.seat, (e.target as HTMLInputElement).value)}
+                  />
+                  <button
+                    type="button"
+                    class={`h-14 w-32 shrink-0 truncate rounded-lg border px-2 text-xs font-bold ${
+                      r.archetype
+                        ? 'border-accent bg-accent/15'
+                        : 'border-app-border bg-app-bg text-app-dim'
+                    }`}
+                    onClick={() => cycleSeatArch(r.seat)}
+                    title="Fixed strategy for this seat — tap to cycle; 'mix' draws from the mix"
+                  >
+                    {r.archetype ?? 'mix'}
+                  </button>
+                  <button
+                    type="button"
+                    class="num h-14 min-w-14 shrink-0 rounded-lg border border-app-border bg-app-bg font-bold"
+                    onClick={() => bumpDisc(r.seat, -0.1)}
+                  >
+                    −
+                  </button>
+                  <span class="num w-8 shrink-0 text-center text-sm font-bold">{r.disc.toFixed(1)}</span>
+                  <button
+                    type="button"
+                    class="num h-14 min-w-14 shrink-0 rounded-lg border border-app-border bg-app-bg font-bold"
+                    onClick={() => bumpDisc(r.seat, +0.1)}
+                  >
+                    +
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div class="mt-3 flex gap-2">
+              <button
+                type="button"
+                class="min-h-14 flex-1 rounded-xl bg-accent font-bold text-app-bg"
+                onClick={saveRoom}
+              >
+                Save room
+              </button>
+              <button
+                type="button"
+                class="min-h-14 flex-1 rounded-xl border border-app-border bg-app-bg font-bold disabled:opacity-40"
+                disabled={!roomLocal}
+                onClick={resetRoom}
+              >
+                Reset to file
+              </button>
+            </div>
+            {roomNote && <p class="pt-1 text-sm text-app-dim">{roomNote}</p>}
           </>
         )}
       </section>

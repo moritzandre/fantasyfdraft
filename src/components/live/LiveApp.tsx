@@ -33,6 +33,7 @@ import NavBar from './NavBar';
 import InstallGate, { gateApplies } from './InstallGate';
 import LeagueScreen from './LeagueScreen';
 import LiveScreen from './LiveScreen';
+import MoreScreen from './MoreScreen';
 import PickLog from './PickLog';
 import PlanBSheet from './PlanBSheet';
 import ReadyCheck from './ReadyCheck';
@@ -45,7 +46,7 @@ import PrepScreen from '../prep/PrepScreen';
 const DEFAULT_ROUTE = '#/hub';
 const ROUTES = new Set([
   '#/hub', '#/ready', '#/setup', '#/prep', '#/live', '#/league', '#/review', '#/log', '#/planb', '#/sync',
-  '#/guide', '#/sim',
+  '#/guide', '#/sim', '#/more',
 ]);
 
 function useRoute(): string {
@@ -228,6 +229,7 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
       {route === '#/planb' && <PlanBSheet s={s} store={store} board={board} />}
       {route === '#/guide' && <GuideScreen />}
       {route === '#/sim' && <SimLab s={s} store={store} board={board} />}
+      {route === '#/more' && <MoreScreen />}
       {showNav && <NavBar route={route} />}
     </div>
   );

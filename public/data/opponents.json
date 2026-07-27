@@ -27,8 +27,26 @@
       "params:        optional global overrides for the sampler (tauScale,",
       "               discSpread, window, tauWindow, needAwareShare,",
       "               jitterSd, homerBoost, reachTau, caps). Calibration",
-      "               (tools/calibrate.mjs) writes its fitted values here."
+      "               (tools/calibrate.mjs) writes its fitted values here.",
+      "",
+      "params.archetypeGamma:  exponent on archetype multipliers (w *= m^g).",
+      "               1 = legacy; 3 makes a wr_heavy seat actually LOOK",
+      "               WR-heavy instead of barely tilting the softmax.",
+      "params.earlyTauThrough / earlyTauScale:  rounds 1..through get",
+      "               tau *= scale — real rooms draft near-chalk early.",
+      "               (0, 1) = legacy off; (2, 0.55) = sharp rounds 1-2.",
+      "",
+      "seats[].archetype:  OPTIONAL fixed strategy name for that seat (set",
+      "               from the Sim Lab Room editor). A fixed seat skips the",
+      "               per-draft mix draw and always plays that strategy;",
+      "               names resolve like mix names (built-ins +",
+      "               strategies.json). Absent = draw from the mix."
     ]
+  },
+  "params": {
+    "archetypeGamma": 3,
+    "earlyTauThrough": 2,
+    "earlyTauScale": 0.55
   },
   "archetypes": {
     "mix": {

@@ -29,6 +29,23 @@
 // — like the need mask — whenever they empty the candidate window. With no
 // mix configured, zero extra rng draws happen and behavior is exactly
 // legacy.
+//
+// REALISM KNOBS (additive — code defaults are exact legacy no-ops):
+//   • archetypeGamma (default 1): archetype multipliers apply as
+//     m**archetypeGamma, so a strategy tilt (e.g. WR ×1.2) can actually
+//     LOOK like its archetype instead of barely nudging the softmax.
+//     Applied when the per-round tables are built; gamma 1 keeps the exact
+//     multiplier double (Math.pow(m, 1) is not guaranteed bit-identical).
+//   • earlyTauThrough (default 0) + earlyTauScale (default 1): when
+//     round ≤ earlyTauThrough, τ ×= earlyTauScale — real rooms draft
+//     near-chalk in the first rounds. Guarded so the default fp path is
+//     untouched.
+//   • Per-seat FIXED archetype: a seat object may carry
+//     `archetype: '<strategyName>'` — that seat SKIPS the mix draw and
+//     always plays that strategy (resolved at ctx build, fail fast on
+//     unknown names). rng accounting: with a mix configured a fixed seat
+//     still draws (and discards) its mix uniform so the other seats' seeds
+//     never shift; with NO mix, fixed seats assign without any draws.
 
 import { slotForPick } from './picks.js';
 import { normal } from './mc.js';
@@ -46,6 +63,9 @@ export const OPP_DEFAULT_PARAMS = Object.freeze({
   needAwareShare: 0.30,
   discSpread: 2.0,     // adpDiscipline → τ factor exp(discSpread·(0.5−d))
   tauScale: 1.0,       // global temperature knob (calibration)
+  archetypeGamma: 1,   // archetype multiplier exponent (1 = legacy no-op)
+  earlyTauThrough: 0,  // rounds 1..this get τ ×= earlyTauScale (0 = off)
+  earlyTauScale: 1,    // early-round chalk factor (<1 ⇒ sharper)
   caps: Object.freeze({ QB: 3, RB: 9, WR: 9, TE: 3, K: 1, DST: 1 }), // realism rails
 });
 
@@ -58,6 +78,8 @@ export const OPP_DEFAULT_PARAMS = Object.freeze({
  * @param {object} league  config/league.json shape.
  * @param {object} opponents  opponents.json shape: {seats: [...],
  *        params?: {...overrides}, archetypes?: {mix: {name: weight}}}.
+ *        A seat may carry archetype: '<strategyName>' — a FIXED per-seat
+ *        strategy that bypasses the mix draw (see the header).
  * @param {object} [params]  overrides on top of opponents.params on top of
  *        OPP_DEFAULT_PARAMS. Two non-numeric extras ride here:
  *        params.strategies — custom-strategy registry for archetype names;
@@ -99,9 +121,13 @@ export function makeOpponentCtx(board, league, opponents, params = {}) {
   const discFactor = new Float64Array(N + 1).fill(1);
   const reachRounds = Array.from({ length: N + 1 }, () => new Set());
   const seatBoost = Array.from({ length: N + 1 }, () => new Float64Array(n).fill(1));
+  const fixedSeatArch = []; // [seat, strategyName] — per-seat FIXED archetypes
   for (const seat of opponents?.seats ?? []) {
     const s = seat.seat;
     if (!(s >= 1 && s <= N)) continue;
+    if (typeof seat.archetype === 'string' && seat.archetype.length > 0) {
+      fixedSeatArch.push([s, seat.archetype]);
+    }
     const d = Math.min(1, Math.max(0, seat.adpDiscipline ?? 0.5));
     discFactor[s] = Math.exp(P.discSpread * (0.5 - d)); // wild ⇒ hot τ, strict ⇒ cold τ
     for (const r of seat.reachRounds ?? []) reachRounds[s].add(r);
@@ -121,26 +147,38 @@ export function makeOpponentCtx(board, league, opponents, params = {}) {
   const skillMaskable = POS.map((p) => ['QB', 'RB', 'WR', 'TE'].includes(p));
   const flexEligInt = POS.map((p) => flexElig.has(p));
 
-  // Archetypes: resolve the mix once, up front (fail fast on unknown names).
+  // Archetypes: resolve the mix + fixed seat archetypes once, up front
+  // (fail fast on unknown names). The table holds every referenced strategy:
+  // mix names first (archCdf indexes into that prefix), then fixed-only
+  // names appended — fixed seats may play strategies outside the mix.
   const rounds = league.rounds;
+  const gamma = P.archetypeGamma;
   let archetypes = null;
   let archCdf = null;
+  const seatFixedArch = new Int16Array(N + 1).fill(-1);
   const mixSrc = 'mix' in params ? params.mix : opponents?.archetypes?.mix ?? null;
-  if (mixSrc && Object.keys(mixSrc).length > 0) {
-    const names = Object.keys(mixSrc);
+  const hasMix = !!(mixSrc && Object.keys(mixSrc).length > 0);
+  if (hasMix || fixedSeatArch.length > 0) {
+    const names = hasMix ? Object.keys(mixSrc) : [];
     const weights = names.map((nm) => {
       const w = mixSrc[nm];
       if (!(typeof w === 'number' && w > 0)) throw new Error(`archetype mix: weight for "${nm}" must be > 0`);
       return w;
     });
-    const total = weights.reduce((a, b) => a + b, 0);
-    archetypes = names.map((nm) => {
+    const tableNames = [...names];
+    for (const [, nm] of fixedSeatArch) if (!tableNames.includes(nm)) tableNames.push(nm);
+    archetypes = tableNames.map((nm) => {
       const strat = resolveStrategy(nm, params.strategies ?? null);
       let mult = null;
       if (Object.keys(strat.multipliers).length > 0) {
         mult = new Float64Array(6 * (rounds + 1)).fill(1);
         for (let pi = 0; pi < 6; pi++) {
-          for (let r = 1; r <= rounds; r++) mult[pi * (rounds + 1) + r] = multiplierFor(strat, POS[pi], r);
+          for (let r = 1; r <= rounds; r++) {
+            const m = multiplierFor(strat, POS[pi], r);
+            // gamma 1 must keep the exact double (Math.pow(m, 1) is not
+            // guaranteed bit-identical to m) — the legacy golden gate.
+            mult[pi * (rounds + 1) + r] = gamma === 1 ? m : Math.pow(m, gamma);
+          }
         }
       }
       const cons = strat.constraints.map((c) => (c.type === 'max'
@@ -148,10 +186,14 @@ export function makeOpponentCtx(board, league, opponents, params = {}) {
         : { max: false, pi: POS_IDX[c.pos], by: c.by, need: c.need }));
       return { name: strat.name, mult, cons: cons.length ? cons : null };
     });
-    archCdf = new Float64Array(names.length);
-    let acc = 0;
-    for (let k = 0; k < weights.length; k++) { acc += weights[k] / total; archCdf[k] = acc; }
-    archCdf[archCdf.length - 1] = 1; // guard fp drift
+    for (const [s, nm] of fixedSeatArch) seatFixedArch[s] = tableNames.indexOf(nm);
+    if (hasMix) {
+      const total = weights.reduce((a, b) => a + b, 0);
+      archCdf = new Float64Array(names.length);
+      let acc = 0;
+      for (let k = 0; k < weights.length; k++) { acc += weights[k] / total; archCdf[k] = acc; }
+      archCdf[archCdf.length - 1] = 1; // guard fp drift
+    }
   }
 
   return {
@@ -163,8 +205,9 @@ export function makeOpponentCtx(board, league, opponents, params = {}) {
     kIdx: POS_IDX.K, dstIdx: POS_IDX.DST,
     window: P.window, tauWindow: P.tauWindow, reachTau: P.reachTau,
     jitterSd: P.jitterSd, needAwareShare: P.needAwareShare, tauScale: P.tauScale,
+    earlyTauThrough: P.earlyTauThrough, earlyTauScale: P.earlyTauScale,
     params: P,
-    archetypes, archCdf,
+    archetypes, archCdf, seatFixedArch,
   };
 }
 
@@ -187,17 +230,23 @@ export function makeDraftSim(ctx) {
   }
 
   /** Draw the per-draft seat randomness: τ jitter + need-aware flags +
-      (only when a mix is configured) one archetype per seat. */
+      (only when a mix is configured) one archetype per seat. A seat with a
+      FIXED archetype always plays it — with a mix it still consumes its
+      draw (discarded, so the other seats' streams never shift); with no
+      mix, fixed seats assign deterministically and NOTHING extra is drawn. */
   function drawSeatState(rng) {
     for (let s = 1; s <= N; s++) jitter[s] = Math.exp(ctx.jitterSd * normal(rng));
     for (let s = 1; s <= N; s++) needAware[s] = rng.next() < ctx.needAwareShare ? 1 : 0;
     if (ctx.archCdf) {
       for (let s = 1; s <= N; s++) {
         const u = rng.next();
+        if (ctx.seatFixedArch[s] >= 0) { seatArch[s] = ctx.seatFixedArch[s]; continue; }
         let k = 0;
         while (k < ctx.archCdf.length - 1 && u >= ctx.archCdf[k]) k++;
         seatArch[s] = k;
       }
+    } else if (ctx.archetypes) {
+      for (let s = 1; s <= N; s++) seatArch[s] = ctx.seatFixedArch[s];
     } else {
       seatArch.fill(-1);
     }
@@ -323,6 +372,9 @@ export function makeDraftSim(ctx) {
   /** Plackett-Luce weights over cand[0..m) into candW; returns ΣW. */
   function computeWeights(seat, round, m, tauLocal, jitterVal) {
     let tau = Math.max(0.5, tauLocal) * ctx.discFactor[seat] * jitterVal * ctx.tauScale;
+    // Early-round chalk — guarded so the default (0, 1) leaves the legacy
+    // fp path bit-identical (no extra multiply).
+    if (ctx.earlyTauThrough > 0 && round <= ctx.earlyTauThrough) tau *= ctx.earlyTauScale;
     if (ctx.reachRounds[seat].has(round)) tau *= ctx.reachTau;
     const boost = ctx.seatBoost[seat];
     const ai = seatArch[seat];
