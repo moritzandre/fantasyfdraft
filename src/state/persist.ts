@@ -347,6 +347,35 @@ export function requestStoragePersist(env: PersistEnv = detectEnv()): void {
   }
 }
 
+/** User-initiated persist request (Ready Check row tap) — NO ask-once guard
+    (that guard is only for the automatic boot-time ask above). Returns the
+    browser's answer, or null when the API is unsupported/failing. */
+export async function requestStoragePersistNow(
+  env: PersistEnv = detectEnv(),
+): Promise<boolean | null> {
+  try {
+    const nav = env.nav;
+    if (!nav || !nav.storage || typeof nav.storage.persist !== 'function') return null;
+    return Boolean(await nav.storage.persist());
+  } catch {
+    return null;
+  }
+}
+
+/** Current persistence status via navigator.storage.persisted(); null when
+    the API is unsupported/failing. */
+export async function isStoragePersisted(
+  env: PersistEnv = detectEnv(),
+): Promise<boolean | null> {
+  try {
+    const nav = env.nav;
+    if (!nav || !nav.storage || typeof nav.storage.persisted !== 'function') return null;
+    return Boolean(await nav.storage.persisted());
+  } catch {
+    return null;
+  }
+}
+
 /** For the Ready Check "last save" row — reads the synchronous tier only.
     savedAt is the ts of the newest logged action (null when the log is empty,
     e.g. right after boot or after undoing everything). */

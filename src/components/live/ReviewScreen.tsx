@@ -9,10 +9,16 @@
 // the mock-draft HISTORY (dp:mock-history:v1, global — archived from
 // practice, reviewable in any mode); a tapped row re-grades its stored
 // picks under the RECORD's league shape, delete is a 3s HoldButton.
+// PRACTICE mode only (mode prop, default 'real' — IMPORT/RESET must never
+// land in the real context): Resume loads a record back into the practice
+// store via IMPORT_STATE and continues it at #/live; Replay room keeps only
+// the record's seed (RESET_DRAFT + SET_UI mockSeed) for same-room-
+// different-choices practice, disabled when no seed was stored.
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { abbrevName, fmt1 } from '../../../shared/format.js';
-import type { Board, DraftState, Store } from '../../state/store';
+import type { Board, DraftState, PortableState, Source, Store, UiState } from '../../state/store';
+import type { AppMode } from '../../state/mode';
 import { deleteMock, loadMockHistory } from '../../state/mockHistory';
 import type { MockRecord } from '../../state/mockHistory';
 import { gradeMyPicks } from '../../state/review';
@@ -64,7 +70,17 @@ function fmtWhen(ts: number): string {
   return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-export default function ReviewScreen({ s, store, board }: { s: DraftState; store: Store; board: Board }) {
+export default function ReviewScreen({
+  s,
+  store,
+  board,
+  mode = 'real',
+}: {
+  s: DraftState;
+  store: Store;
+  board: Board;
+  mode?: AppMode;
+}) {
   const [registry, setRegistry] = useState<StrategyRegistry | null>(null);
   useEffect(() => {
     loadStrategies().then(setRegistry);
@@ -99,6 +115,45 @@ export default function ReviewScreen({ s, store, board }: { s: DraftState; store
     };
     return gradeMyPicks(board, league, rec.picks, registry);
   }, [expandedId, registry, history]);
+
+  // --- Resume / Replay (PRACTICE only — the mode guard keeps IMPORT/RESET
+  // out of the real context; both are recoverable, so no confirm).
+  const practice = mode === 'practice';
+
+  /** Load the archived mock INTO the practice store and continue it live.
+      Built exactly to the IMPORT_STATE reducer's shape: league merged over
+      the current one (strategy set EXPLICITLY so a record without one doesn't
+      inherit today's), picks with ts:0, cursor = highest n + 1, ui = current
+      ui with the record's room seed (cleared when none was stored). */
+  const resumeMock = (r: MockRecord) => {
+    const cur = store.getState();
+    const maxN = r.picks.reduce((m, p) => Math.max(m, p.n), 0);
+    const state: PortableState = {
+      schemaVersion: 1,
+      buildHash: cur.buildHash, // reducer keeps the running board's hash anyway
+      league: {
+        ...cur.league,
+        teams: r.league.teams,
+        slot: r.league.slot,
+        rounds: r.league.rounds,
+        snake: r.league.snake,
+        strategy: r.league.strategy,
+      },
+      picks: r.picks.map((p) => ({ n: p.n, idx: p.idx, source: p.source as Source, ts: 0 })),
+      pickCursor: maxN + 1,
+      ui: { ...cur.ui, mockSeed: r.seed ?? undefined } as unknown as UiState,
+    };
+    store.dispatch({ type: 'IMPORT_STATE', state });
+    location.hash = '#/live';
+  };
+
+  /** Same room, different choices: wipe the picks, pin the record's seed —
+      the mock driver re-derives the identical seats/archetypes from it. */
+  const replayRoom = (r: MockRecord) => {
+    store.dispatch({ type: 'RESET_DRAFT' });
+    store.dispatch({ type: 'SET_UI', ui: { mockSeed: r.seed } as unknown as Partial<UiState> });
+    location.hash = '#/live';
+  };
 
   return (
     <main class="mx-auto max-w-2xl px-4 pb-16">
@@ -145,7 +200,7 @@ export default function ReviewScreen({ s, store, board }: { s: DraftState; store
           <ul class="flex flex-col gap-1.5">
             {history.map((r) => (
               <li class="rounded-lg border border-app-border bg-app-surface">
-                <div class="flex items-center gap-2 px-3 py-1">
+                <div class="flex flex-wrap items-center gap-2 px-3 py-1">
                   <button
                     type="button"
                     class="flex min-h-14 min-w-0 flex-1 items-center gap-2 text-left"
@@ -174,6 +229,34 @@ export default function ReviewScreen({ s, store, board }: { s: DraftState; store
                     ) : (
                       <span class="shrink-0 text-xs text-app-dim">ungraded</span>
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    class="h-14 shrink-0 rounded-lg border border-app-border px-3 text-xs font-bold disabled:opacity-40"
+                    disabled={!practice}
+                    title={
+                      practice
+                        ? 'load this mock into the practice draft and continue it at #/live'
+                        : 'practice mode only — switch to practice in the Hub'
+                    }
+                    onClick={() => resumeMock(r)}
+                  >
+                    Resume
+                  </button>
+                  <button
+                    type="button"
+                    class="h-14 shrink-0 rounded-lg border border-app-border px-3 text-xs font-bold disabled:opacity-40"
+                    disabled={!practice || r.seed === null}
+                    title={
+                      !practice
+                        ? 'practice mode only — switch to practice in the Hub'
+                        : r.seed === null
+                          ? 'no seed stored'
+                          : 'same room, fresh start — draft it again with different choices'
+                    }
+                    onClick={() => replayRoom(r)}
+                  >
+                    Replay room
                   </button>
                   <HoldButton
                     ms={3000}

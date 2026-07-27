@@ -5,8 +5,10 @@
 // auto-pick-me toggle (engine rank 1) · strategy quick-cycle (SET_LEAGUE) ·
 // room-archetype readout · Archive (grade via the shared gradeMyPicks →
 // dp:mock-history:v1, then RESET_DRAFT + clear ui.mockSeed for a fresh
-// room) · Review link. Every sim pick dispatches PICK_MADE {source:'sim'}
-// through the one reducer — individually undoable like any tap.
+// room) · Redo room (RESET_DRAFT keeping ui.mockSeed AND the driver — the
+// same seed reproduces the same room, nothing archived) · Review link.
+// Every sim pick dispatches PICK_MADE {source:'sim'} through the one
+// reducer — individually undoable like any tap.
 
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { Board, DraftState, Store, UiState } from '../../state/store';
@@ -142,6 +144,18 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
     setNote('archived — fresh room ready');
   };
 
+  // Redo room: archive NOTHING — wipe the picks and keep ui.mockSeed AND the
+  // memoized driver (no roomRev bump): the driver re-derives the whole room
+  // from the pick log each step (rebuild()), so the same seed over an empty
+  // log reproduces the identical seats/archetypes. Recoverable (practice
+  // strip only, and the picks were mine to throw away) — no confirm.
+  const onRedo = () => {
+    if (s.picks.length === 0) return;
+    setRunning(false);
+    store.dispatch({ type: 'RESET_DRAFT' });
+    setNote('same room, fresh start');
+  };
+
   return (
     <div class="lv-mock-controls flex items-center gap-2 overflow-x-auto px-2">
       <span class="lv-clock-near shrink-0 rounded px-2 py-1 text-xs font-bold">MOCK</span>
@@ -206,6 +220,15 @@ export default function MockControls({ s, store, board }: { s: DraftState; store
         title="save this mock to history (Review) and reset for a fresh room"
       >
         Archive
+      </button>
+      <button
+        type="button"
+        class="h-14 shrink-0 rounded-lg border border-app-border bg-app-surface px-4 font-bold disabled:opacity-40"
+        disabled={s.picks.length === 0}
+        onClick={onRedo}
+        title="same room, fresh start — wipe the picks but keep this room's seed (nothing is archived)"
+      >
+        Redo room
       </button>
       {(done || s.picks.length > 0) && (
         <a

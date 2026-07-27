@@ -223,7 +223,7 @@ function StoreApp({ board, rawBoard, store, profiles, mode, onProfiles, onMode }
           <LiveScreen s={s} store={store} board={board} mode={mode} />
         ))}
       {route === '#/league' && <LeagueScreen s={s} store={store} board={board} />}
-      {route === '#/review' && <ReviewScreen s={s} store={store} board={board} />}
+      {route === '#/review' && <ReviewScreen s={s} store={store} board={board} mode={mode} />}
       {route === '#/log' && <PickLog s={s} store={store} board={board} />}
       {route === '#/sync' && <SyncPanel s={s} store={store} board={board} mode={mode} />}
       {route === '#/planb' && <PlanBSheet s={s} store={store} board={board} />}

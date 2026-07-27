@@ -6,10 +6,10 @@
 
 import { useEffect, useState } from 'preact/hooks';
 import type { Board, DraftState, Store } from '../../state/store';
-import { acceptUpdate, isUpdatePending } from '../../pwa';
+import { acceptUpdate, canInstall, isUpdatePending, promptInstall } from '../../pwa';
 import { wakeLockAvailable } from '../../ui/wakelock';
 import InstallGate, { gateApplies, isStandalone } from './InstallGate';
-import { lastSaveInfo } from '../../state/persist';
+import { isStoragePersisted, lastSaveInfo, requestStoragePersistNow } from '../../state/persist';
 
 function Row({
   ok,
@@ -51,11 +51,17 @@ function Row({
   );
 }
 
+/** Persistent-storage row status. 'denied' means a TAP just got refused —
+    'no' is merely "not granted yet" (never asked, or boot ask ignored). */
+type PersistStatus = 'checking' | 'unsupported' | 'granted' | 'no' | 'denied';
+
 export default function ReadyCheck({ s, store, board }: { s: DraftState; store: Store; board: Board }) {
   const { dispatch } = store;
   const [swOk, setSwOk] = useState<boolean | null>(null);
-  const [persisted, setPersisted] = useState<boolean | null>(null);
+  const [persistStatus, setPersistStatus] = useState<PersistStatus>('checking');
   const [swUpdate, setSwUpdate] = useState(() => isUpdatePending());
+  const [installable, setInstallable] = useState(() => canInstall());
+  const [installNote, setInstallNote] = useState('');
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -65,20 +71,43 @@ export default function ReadyCheck({ s, store, board }: { s: DraftState; store: 
         .catch(() => setSwOk(false));
     } else setSwOk(false);
 
-    if (navigator.storage?.persisted) {
-      navigator.storage.persisted().then(setPersisted).catch(() => setPersisted(false));
-    } else setPersisted(false);
+    isStoragePersisted().then((r) =>
+      setPersistStatus(r === null ? 'unsupported' : r ? 'granted' : 'no'),
+    );
 
     const onUpdate = () => setSwUpdate(true);
+    const onInstallable = () => setInstallable(true);
     document.addEventListener('dp:sw-update-available', onUpdate);
-    return () => document.removeEventListener('dp:sw-update-available', onUpdate);
+    document.addEventListener('dp:can-install', onInstallable);
+    return () => {
+      document.removeEventListener('dp:sw-update-available', onUpdate);
+      document.removeEventListener('dp:can-install', onInstallable);
+    };
   }, []);
 
+  // Tap → ask the browser DIRECTLY (no ask-once guard), then re-check and
+  // update the row live.
   const requestPersist = async () => {
-    try {
-      if (navigator.storage?.persist) setPersisted(await navigator.storage.persist());
-    } catch {
-      setPersisted(false);
+    const granted = await requestStoragePersistNow();
+    if (granted === null) {
+      setPersistStatus('unsupported');
+      return;
+    }
+    const now = await isStoragePersisted();
+    setPersistStatus((now ?? granted) ? 'granted' : 'denied');
+  };
+
+  // Tap → fire the stashed Chromium install prompt when there is one;
+  // otherwise the remedy text carries the manual steps.
+  const requestInstall = async () => {
+    const res = await promptInstall();
+    setInstallable(canInstall());
+    if (res === 'accepted') {
+      setInstallNote(
+        'install accepted — close this tab and relaunch from the app icon (this row can only verify standalone after that relaunch)',
+      );
+    } else if (res === 'dismissed') {
+      setInstallNote('install dismissed — tap again if the browser re-offers it');
     }
   };
 
@@ -128,20 +157,42 @@ export default function ReadyCheck({ s, store, board }: { s: DraftState; store: 
       <Row
         ok={standalone}
         label="Standalone mode"
-        detail={standalone ? 'running from the Home Screen icon' : 'running in a browser tab'}
-        remedy="Share → Add to Home Screen, launch from the icon"
+        detail={
+          standalone
+            ? 'running from the Home Screen icon'
+            : installNote ||
+              (installable
+                ? 'browser tab — an install prompt is available'
+                : 'running in a browser tab')
+        }
+        remedy={
+          installable
+            ? "Tap this row to install, then reopen from the app icon — installing can't be verified until you relaunch"
+            : "iPad/iPhone: Share → Add to Home Screen, then launch from the icon. Desktop: use the browser's Install/App menu."
+        }
+        onTap={standalone ? undefined : requestInstall}
       />
       <Row
-        ok={persisted}
+        ok={persistStatus === 'checking' ? null : persistStatus === 'granted'}
         label="Persistent storage"
         detail={
-          persisted === null
+          persistStatus === 'checking'
             ? 'checking…'
-            : persisted
+            : persistStatus === 'granted'
               ? 'storage.persist() granted'
-              : 'not granted — tap to request'
+              : persistStatus === 'unsupported'
+                ? 'navigator.storage.persist() unavailable'
+                : persistStatus === 'denied'
+                  ? 'request denied just now'
+                  : 'not granted — tap to request'
         }
-        remedy="Tap this row; if still denied, install to Home Screen first"
+        remedy={
+          persistStatus === 'unsupported'
+            ? 'Not supported in this browser — the IndexedDB mirror still protects your draft.'
+            : persistStatus === 'denied'
+              ? 'Browser denied it — install to the Home Screen first (persistence is usually granted to installed apps), then tap again.'
+              : 'Tap this row to request persistence now'
+        }
         onTap={requestPersist}
       />
       <Row

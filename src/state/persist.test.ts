@@ -14,6 +14,8 @@ import {
   bootPersistedStore,
   attachLifecycle,
   requestStoragePersist,
+  requestStoragePersistNow,
+  isStoragePersisted,
   clearPersisted,
 } from './persist.ts';
 import type { PersistEnv, StorageLike } from './persist.ts';
@@ -242,6 +244,53 @@ test('navigator.storage.persist() is requested exactly once', () => {
   requestStoragePersist(env);
   requestStoragePersist(env);
   assert.equal(asked, 1);
+});
+
+test('requestStoragePersistNow has NO ask-once guard and returns the browser answer', async () => {
+  const storage = fakeStorage();
+  let asked = 0;
+  const answers = [false, true];
+  const env: PersistEnv = {
+    storage,
+    indexedDB: null,
+    nav: { storage: { persist: () => Promise.resolve(answers[asked++]) } },
+  };
+  // even with the boot-time ask-once marker already set, the tap still asks
+  requestStoragePersist(env);
+  assert.equal(asked, 1, 'boot ask consumed the guard');
+  assert.equal(await requestStoragePersistNow(env), true, 'second call still asks (no guard)');
+  assert.equal(asked, 2);
+});
+
+test('requestStoragePersistNow: unsupported nav / throwing persist → null', async () => {
+  assert.equal(await requestStoragePersistNow({ nav: null }), null);
+  assert.equal(await requestStoragePersistNow({ nav: {} }), null);
+  assert.equal(await requestStoragePersistNow({ nav: { storage: {} } }), null);
+  assert.equal(
+    await requestStoragePersistNow({
+      nav: { storage: { persist: () => Promise.reject(new Error('nope')) } },
+    }),
+    null,
+  );
+});
+
+test('isStoragePersisted mirrors navigator.storage.persisted(), null when unsupported', async () => {
+  assert.equal(
+    await isStoragePersisted({ nav: { storage: { persisted: () => Promise.resolve(true) } } }),
+    true,
+  );
+  assert.equal(
+    await isStoragePersisted({ nav: { storage: { persisted: () => Promise.resolve(false) } } }),
+    false,
+  );
+  assert.equal(await isStoragePersisted({ nav: null }), null);
+  assert.equal(await isStoragePersisted({ nav: { storage: {} } }), null);
+  assert.equal(
+    await isStoragePersisted({
+      nav: { storage: { persisted: () => Promise.reject(new Error('nope')) } },
+    }),
+    null,
+  );
 });
 
 test('clearPersisted removes both localStorage keys', () => {
