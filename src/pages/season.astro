@@ -1,0 +1,18 @@
+---
+// The SEASON page — the draft app's sibling PWA page (lineup coach, waivers,
+// sandbox-first Trade Desk, league panel). Fully client-side like index.astro:
+// SeasonApp boots profiles, the board + season.json merge, the per-profile
+// season store and its own hash router (#/coach · #/waivers · #/trade ·
+// #/league) itself.
+import AppLayout from '../layouts/AppLayout.astro';
+import SeasonApp from '../components/season/SeasonApp';
+---
+
+<AppLayout title="DraftPrep — Season">
+  <SeasonApp client:only="preact" />
+  <noscript>
+    <p style="padding:2rem;text-align:center">
+      DraftPrep Season needs JavaScript — lineup calls come from the engine, not a server.
+    </p>
+  </noscript>
+</AppLayout>

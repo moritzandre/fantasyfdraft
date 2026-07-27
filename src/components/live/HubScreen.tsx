@@ -46,6 +46,10 @@ const TOOLS: Array<[string, string, string]> = [
   ['#/guide', 'Guide', 'how everything works — start here'],
   ['#/ready', 'Ready Check', 'board hash · SW · storage · wake lock'],
   ['#/live', 'Draft Day', 'the pick-clock cockpit'],
+  // The Season page is a separate PAGE, not a hash route — full href on purpose.
+  // NO trailing slash: with Astro trailingSlash 'ignore' the SW precaches the
+  // page under the key 'season', and only the slash-less URL hits it offline.
+  [import.meta.env.BASE_URL + 'season', 'Season', 'lineup coach · waivers · Trade Desk'],
   ['#/prep', 'Prep', 'tiers · tags · overrides · strategy · rehearsal'],
   ['#/sim', 'Sim Lab', 'strategy sweeps + mock calibration, in-app'],
   ['#/league', 'League', 'all 12 rosters · live draft grid'],

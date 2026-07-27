@@ -113,8 +113,17 @@ commit docs/ + push → `make_pdfs.py`.
   evaluation.json matches the buildHash.
 - **Calibration**: fetch_mocks.py → calibrate.mjs (teacher-forced LL, pAvail reliability,
   held-one-out grid) → opponents.json `params` → re-run simulate.mjs.
-- Post-draft (planned, not started): season platform — build_week.py + season.json, per-profile
-  season stores, lineup coach, waivers, sandbox-first Trade Desk. See the plan file.
+- **Season platform (LIVE, built ahead of the season)**: `/season` page (own island + hash
+  routes #/coach · #/waivers · #/trade · #/league) on per-profile season stores
+  (`dp:season:<id>:v1`) + `mergeSeason(board, season.json)` (degraded board-only fallback).
+  Weekly data: `npm run week` (build_week.py → verify_week.py, 5 gates, ~107 KB season.json,
+  NetworkFirst-cached so data-only pushes reach clients without a SW update). League sync =
+  `leagueSyncManager` (one atomic SEASON_SYNCED; on failure the dot changes and nothing else).
+  Math: engine/week.js + engine/trade.js (pure). Trade Desk is sandbox-first — works with zero
+  sync. Sleeper account (`dp:account:v1`) connects leagues → auto-created profiles (HubScreen).
+  In-app: #/sim (browser sweeps + mock calibration in a worker; params → `dp:opp-params:v1`),
+  Strategies+ editor tab (`dp:strategies-local:v1`, merged over strategies.json), #/guide wiki,
+  PWA reload banner (acceptUpdate).
 
 ## Current status (2026-07-27) & open items
 

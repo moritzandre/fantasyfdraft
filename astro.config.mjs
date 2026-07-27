@@ -39,10 +39,22 @@ export default defineConfig({
         // Precache the entire app shell AND the data files: the draft must run
         // in airplane mode from a cold Home-Screen launch.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
-        globIgnores: ['**/sheets/**'], // print pages are desktop-only, keep the SW cache lean
+        // sheets: print pages are desktop-only, keep the SW cache lean.
+        // season data: changes weekly — NetworkFirst below, never precached
+        // (a precached season.json would pin week-1 data until the next build).
+        globIgnores: ['**/sheets/**', '**/data/season*.json'],
         navigateFallback: null,
         // Sleeper API is network-only by omission: no runtimeCaching entry —
         // sync is a progressive enhancement and must never be served stale.
+        runtimeCaching: [
+          {
+            // season.json / season.<profile>.json: fresh when online, last
+            // good copy offline — the season page must still boot in a tunnel.
+            urlPattern: /\/data\/season[^/]*\.json$/,
+            handler: 'NetworkFirst',
+            options: { cacheName: 'season-data', expiration: { maxEntries: 4 } },
+          },
+        ],
       },
       devOptions: { enabled: false },
     }),
