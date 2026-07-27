@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   print.css — hand-written paged-media CSS for the 14 printed sheets.
+   Loaded ONLY by src/pages/sheets/[sheet].astro, together with tokens.css and
+   NOTHING else — global.css (and with it Tailwind's preflight) must never
+   reach these pages, so Tailwind cannot fight the exact-mm layout.
+
+   Paper selection is runtime, not build time: the sheet page's inline script
+   reads ?paper=a4|letter and ?mode=color|gray, sets html.paper-* / html.mode-*
+   classes, and injects the matching `@page { size }` (an @page rule cannot
+   switch on a class, so the script owns the physical size; this file owns
+   everything else). Default below is A4 so the page prints sanely even with
+   the script somehow skipped.
+
+   ALL ink lives inside the 210mm × 279.4mm A4/Letter safe intersection
+   (A4 width × Letter height). The .sheet box IS that intersection; the
+   paper-* classes only center it on the physical page:
+     A4     210 × 297    → 8.7mm top offset, 0 sides
+     Letter 215.9 × 279.4 → 2.9mm side offset, 0 top
+   Hairlines never below 0.5pt, tints never below 5% (tokens.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@page {
+  size: A4 portrait; /* overridden at runtime by the injected @page rule */
+  margin: 0;         /* the .sheet box handles its own padding */
+}
+
+/* Backgrounds (tier bands!) must print. Chrome additionally needs
+   --print-background on the CLI — CSS alone gives you white tier bands. */
+* {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: #fff;
+  color: #000;
+  /* Narrow grotesk: the only way 4 × 50 full rows fit 210mm at 8.5pt.
+     Arial Narrow ships with Windows, so headless Chrome embeds it. */
+  font-family: 'Arial Narrow', 'Liberation Sans Narrow', 'Helvetica Neue', Arial, sans-serif;
+  font-stretch: condensed;
+}
+
+/* Grayscale emission: one filter, every sheet, so ?mode=gray is exactly what
+   the B&W laser will do — used to proof the three tier channels. */
+html.mode-gray body {
+  filter: grayscale(1);
+}
+
+/* ── The sheet box — the safe intersection, one per printed page ─────────── */
+.sheet {
+  width: 210mm;
+  height: 279.4mm;
+  overflow: hidden; /* anything past the safe box is a bug, not bleed */
+  padding: 6mm 4mm 8mm;
+  position: relative;
+  background: #fff;
+  break-after: page;
+  page-break-after: always;
+}
+html.paper-a4 .sheet {
+  margin: 8.7mm 0 0; /* (297 − 279.4)/2, top only — bottom falls out free */
+}
+html.paper-letter .sheet {
+  margin: 0 2.9mm; /* (215.9 − 210)/2, shaved 0.05mm so rounding can't spill */
+}
+
+/* Screen preview of the very same page (also the in-app Plan B host). */
+@media screen {
+  body { background: #666; padding: 8mm 0; }
+  .sheet { margin: 0 auto 8mm !important; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.55); }
+}
+
+/* ── Sheet chrome: header + provenance footer ────────────────────────────── */
+.sheet-head h1 {
+  font-size: 11pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sheet-meta {
+  font-size: 7pt;
+  color: #333;
+  margin: 0.5mm 0 2mm;
+}
+.sheet-foot {
+  /* consistency contract: same hash as the app header; mismatch ⇒ reprint */
+  position: absolute;
+  left: 4mm;
+  right: 4mm;
+  bottom: 3mm;
+  font-size: 6.5pt;
+  color: #333;
+  border-top: var(--rule-hairline);
+  padding-top: 0.8mm;
+}
+
+/* ── Tier encoding — the three redundant grayscale channels ──────────────────
+   1. background luminance ramp  2. the letter in the row  3. left-border WEIGHT
+   All values come from tokens.css; there is no second copy here. */
+.tier-a { background: var(--tier-a-bg); color: var(--tier-a-fg); border-left: var(--tier-a-border) solid #000; }
+.tier-b { background: var(--tier-b-bg); color: var(--tier-b-fg); border-left: var(--tier-b-border) solid #000; }
+.tier-c { background: var(--tier-c-bg); color: var(--tier-c-fg); border-left: var(--tier-c-border) solid #000; }
+.tier-d { background: var(--tier-d-bg); color: var(--tier-d-fg); border-left: var(--tier-d-border) solid #000; }
+.tier-e { background: var(--tier-e-bg); color: var(--tier-e-fg); border-left: var(--tier-e-border) solid #000; }
+.tier-f { background: var(--tier-f-bg); color: var(--tier-f-fg); border-left: var(--tier-f-border) solid #000; }
+
+/* Position: border STYLE under the pos-rank cell, hue as decoration only
+   (double needs ≥2.5pt to survive rasterization as two lines). */
+.pos-qb  { border-bottom: 1.2pt var(--pos-qb-style)  var(--pos-qb-hue); }
+.pos-rb  { border-bottom: 1pt   var(--pos-rb-style)  var(--pos-rb-hue); }
+.pos-wr  { border-bottom: 1pt   var(--pos-wr-style)  var(--pos-wr-hue); }
+.pos-te  { border-bottom: 2.5pt var(--pos-te-style)  var(--pos-te-hue); }
+.pos-k   { border-bottom: 0.5pt var(--pos-k-style)   var(--pos-k-hue); }
+.pos-dst { border-bottom: 0.5pt var(--pos-dst-style) var(--pos-dst-hue); }
+
+/* Rows and tier cards may never straddle a page break. */
+.bb-row,
+.bb-tierbreak,
+.tier-card {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* ── S4/S5 Master Big Board — 4 columns × 50 rows per page ───────────────────
+   Column width: (210 − 8 padding − 3×1.5 gaps) / 4 = 49.4mm. Fixed cells sum
+   to ~40.9mm; the name takes the rest (~8.5mm ≈ 8 narrow chars — "Gibbs, J."
+   just clips; the Phase 1 laser print adjudicates this density, and the 8mm
+   pen checkbox is the knob to negotiate if names must win). */
+.bb-grid {
+  display: grid; /* explicit grid, never column-count */
+  grid-template-columns: repeat(4, 1fr);
+  column-gap: 1.5mm;
+}
+.bb-row {
+  display: grid;
+  /*                    rank  T    name pos    tm     bye    proj   vbd    adp    ±   ✓  */
+  grid-template-columns: 4mm 2.8mm 1fr 4.6mm 4.4mm 2.7mm 4.4mm 3.9mm 4.1mm 2mm 8mm;
+  align-items: center;
+  font-size: 8.5pt;
+  line-height: 1.15;
+  border-bottom: 0.5pt solid #999;
+}
+.bb-headrow {
+  font-size: 6pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-left: 3.5pt solid transparent; /* align with the widest tier border */
+  border-bottom: var(--rule-hairline);
+  color: #333;
+}
+.bb-rank { text-align: right; padding-right: 0.6mm; }
+.bb-tier {
+  /* channel 2: the letter, boxed so it reads even on the darkest band */
+  border: 0.5pt solid currentColor;
+  font-size: 6.5pt;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3;
+  margin: 0.2mm 0.4mm 0.2mm 0.2mm;
+}
+.bb-name {
+  overflow: hidden;
+  white-space: nowrap;
+  padding-right: 0.5mm;
+}
+.bb-pos { text-align: left; padding-left: 0.4mm; } /* daylight after the clipped name */
+.bb-num { text-align: right; padding-left: 0.3mm; padding-right: 0.5mm; }
+.bb-arrow { text-align: center; font-size: 7pt; }
+.bb-cb { display: flex; justify-content: center; } /* 8mm pen cell */
+.bb-cb > span {
+  width: 3.4mm;
+  height: 3.4mm;
+  border: 0.5pt solid #000;
+  background: #fff;
+}
+
+/* Labelled rule between tiers: "TIER B → C · cliff 21 pts". Replaces the row
+   hairline with the heavy break rule from tokens.css. */
+.bb-tierbreak {
+  border-top: var(--rule-tier-break);
+  font-size: 6pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #000;
+  padding: 0.3mm 0 0.4mm 4mm;
+}
+/* Weak break (TierSep < 1.0): dashed, "treat as one tier" (future sheets). */
+.bb-tierbreak.weak {
+  border-top: var(--rule-weak-break);
+  font-weight: 400;
+  color: #555;
+}

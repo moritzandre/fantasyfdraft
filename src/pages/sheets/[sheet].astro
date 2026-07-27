@@ -1,0 +1,62 @@
+---
+// sheets/[sheet].astro — one static route per printed sheet, rendered at build
+// time into docs/sheets/<id>/index.html with the board data baked in: no
+// runtime fetch, no ES modules, fully static HTML for Chrome to print.
+//
+// STYLE ISOLATION (non-negotiable): these pages import tokens.css + print.css
+// ONLY — never global.css, so Tailwind's preflight cannot leak into the
+// exact-mm paged layout. That is why this page has its own <html> skeleton
+// instead of AppLayout.astro.
+//
+// Phase 1 data source is tests/fixtures/fakeBoard.json (20 fake players);
+// Phase 8 swaps the import to public/data/board.json without touching layout.
+import '../../styles/tokens.css';
+import '../../styles/print.css';
+import BigBoard from '../../components/print/BigBoard';
+import fakeBoard from '../../../tests/fixtures/fakeBoard.json';
+import league from '../../../config/league.json';
+
+// The sheet registry: id → component (+ props). The other 13 sheets append
+// here (S1 ops-card, S2 strategy-brief, S6 tiers-rb, … S14 pace-card) — one
+// line each, nothing else changes. Exported so getStaticPaths (module scope)
+// can see it.
+export const SHEETS = {
+  'big-board': { title: 'S4 · Master Big Board', component: BigBoard },
+};
+
+export function getStaticPaths() {
+  return Object.keys(SHEETS).map((sheet) => ({ params: { sheet } }));
+}
+
+const entry = SHEETS[Astro.params.sheet as string];
+const Sheet = entry.component;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{entry.title}</title>
+    <script is:inline>
+      // ?paper=a4|letter & ?mode=color|gray are RUNTIME switches on a static
+      // page — the build cannot see query params. This sets html.paper-* /
+      // html.mode-* (print.css keys off the classes) and injects the matching
+      // @page size, because an @page rule cannot switch on a class. Runs
+      // synchronously in <head>, so it is done before first paint and before
+      // headless Chrome prints.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var paper = q.get('paper') === 'letter' ? 'letter' : 'a4';
+        var mode = q.get('mode') === 'gray' ? 'gray' : 'color';
+        document.documentElement.className = 'paper-' + paper + ' mode-' + mode;
+        var s = document.createElement('style');
+        s.textContent =
+          '@page { size: ' + (paper === 'letter' ? 'Letter' : 'A4') + ' portrait; margin: 0; }';
+        document.head.appendChild(s);
+      })();
+    </script>
+  </head>
+  <body>
+    <Sheet board={fakeBoard} league={league} />
+  </body>
+</html>
