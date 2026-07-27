@@ -12,6 +12,15 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 4321
+    },
+    {
+      "name": "draftprep-verify",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "C:\\Users\\morit\\AppData\\Local\\Temp\\claude\\C--Users-morit-Documents-DraftPrep\\874ec065-afb5-438d-b9f0-e73806bee1dc\\scratchpad\\serve_verify.py"
+      ],
+      "port": 8788,
+      "url": "http://127.0.0.1:8788"
     }
   ]
 }

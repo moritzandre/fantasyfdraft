@@ -1,0 +1,139 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   live.css — screen-only styles for the Live island that Tailwind utilities
+   can't express: container queries, content-visibility row containment, the
+   hold-to-confirm fill, tier/position encodings driven by tokens.css, and the
+   on-the-clock banner channels. Imported ONLY by LiveApp.tsx — never by the
+   print pages. All encoding values come from tokens.css custom properties.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── App root ──────────────────────────────────────────────────────────── */
+.lv-app {
+  min-height: 100dvh;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.lv-app input,
+.lv-app textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ── Top bar: 72px sticky, safe-area aware ─────────────────────────────── */
+.lv-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: calc(72px + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+}
+
+/* On-the-clock banner — three redundant channels (color + text + weight) */
+.lv-clock-far  { background: var(--app-bg); color: var(--app-text-dim); border: 1px solid var(--app-border); }
+.lv-clock-near { background: var(--clock-near); color: #131002; }
+.lv-clock-up   { background: var(--clock-up); color: #04130a; font-weight: 800; letter-spacing: 0.04em; }
+
+/* ── Live grid: 22 / 44 / 34, container-query responsive ───────────────── */
+.lv-root { container-type: inline-size; }
+.lv-grid {
+  display: grid;
+  grid-template-columns: 22% 44% 34%;
+  height: calc(100dvh - 72px - env(safe-area-inset-top));
+}
+.lv-panel {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-right: 1px solid var(--app-border);
+}
+.lv-panel:last-child { border-right: none; }
+.lv-tabs { display: none; }
+
+@container (max-width: 899px) {
+  .lv-grid {
+    grid-template-columns: 100%;
+    height: calc(100dvh - 72px - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  .lv-panel { display: none; border-right: none; }
+  .lv-root[data-tab='team']  .lv-panel-team  { display: block; }
+  .lv-root[data-tab='recs']  .lv-panel-recs  { display: block; }
+  .lv-root[data-tab='board'] .lv-panel-board { display: block; }
+  .lv-tabs {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    height: calc(64px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--app-surface);
+    border-top: 1px solid var(--app-border);
+  }
+}
+
+/* ── Board rows: 52px, cheap paint via content-visibility ──────────────── */
+.lv-row {
+  min-height: 52px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+
+/* Tier: 4px left border, luminance from the tokens.css ramp (channel 1),
+   plus the letter chip (channel 2) — grayscale-safe by construction. */
+.lv-tier-a { border-left: 4px solid var(--tier-a-bg); }
+.lv-tier-b { border-left: 4px solid var(--tier-b-bg); }
+.lv-tier-c { border-left: 4px solid var(--tier-c-bg); }
+.lv-tier-d { border-left: 4px solid var(--tier-d-bg); }
+.lv-tier-e { border-left: 4px solid var(--tier-e-bg); }
+.lv-tier-f { border-left: 4px solid var(--tier-f-bg); }
+
+.lv-chip-a { background: var(--tier-a-bg); color: var(--tier-a-fg); }
+.lv-chip-b { background: var(--tier-b-bg); color: var(--tier-b-fg); }
+.lv-chip-c { background: var(--tier-c-bg); color: var(--tier-c-fg); }
+.lv-chip-d { background: var(--tier-d-bg); color: var(--tier-d-fg); }
+.lv-chip-e { background: var(--tier-e-bg); color: var(--tier-e-fg); }
+.lv-chip-f { background: var(--tier-f-bg); color: var(--tier-f-fg); }
+
+/* Position: border STYLE under the pos label, hue as decoration (tokens) */
+.lv-pos-qb  { border-bottom: 2px var(--pos-qb-style)  var(--pos-qb-hue); }
+.lv-pos-rb  { border-bottom: 2px var(--pos-rb-style)  var(--pos-rb-hue); }
+.lv-pos-wr  { border-bottom: 2px var(--pos-wr-style)  var(--pos-wr-hue); }
+.lv-pos-te  { border-bottom: 3px var(--pos-te-style)  var(--pos-te-hue); }
+.lv-pos-k   { border-bottom: 1px var(--pos-k-style)   var(--pos-k-hue); }
+.lv-pos-dst { border-bottom: 1px var(--pos-dst-style) var(--pos-dst-hue); }
+
+/* ── Bye strip: hatch (never red) + count badge ────────────────────────── */
+.lv-bye-hatch { background-image: var(--hatch); }
+.lv-bye-alert { outline: 2px solid var(--clock-near); outline-offset: -2px; font-weight: 800; }
+
+/* ── Rec cards: score decomposition bar ────────────────────────────────── */
+.lv-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--app-bg); }
+.lv-bar-mv       { background: var(--app-accent); }
+.lv-bar-cow      { background: var(--clock-near); }
+.lv-bar-scarcity { background: oklch(0.68 0.11 190); }
+.lv-bar-pen      { background: oklch(0.52 0.03 265); background-image: var(--hatch); }
+
+/* "changed" dot — ordering moved vs the previous rev */
+.lv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--app-accent); }
+
+/* ── Hold-to-confirm (3s reset / install-gate ack; 500ms is JS-side) ───── */
+.lv-hold { position: relative; overflow: hidden; }
+.lv-hold-fill {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: color-mix(in oklab, var(--clock-near) 45%, transparent);
+  pointer-events: none;
+}
+.lv-hold.lv-holding .lv-hold-fill {
+  transform: scaleX(1);
+  transition: transform var(--hold-ms, 3000ms) linear;
+}
+
+/* ── Plan B: the printed sheet on-screen, drafted players struck ───────── */
+.lv-planb .bb-row.lv-struck { text-decoration: line-through; opacity: 0.45; }

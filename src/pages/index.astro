@@ -1,57 +1,17 @@
 ---
-// Phase 0/3 shell: proves the toolchain, the Pages deploy, and (Phase 3) the
-// offline PWA path on the iPad — BEFORE any real app code exists.
-// Will become the hash-routed app shell (#/ready #/setup #/prep #/live).
+// The PWA shell. The live board is fully client-side by design (plan: "Live
+// iPad app"), so Astro's zero-JS default is deliberately bypassed here with
+// client:only — LiveApp boots board.json, the store and the hash router
+// (#/ready · #/setup · #/live) itself.
 import AppLayout from '../layouts/AppLayout.astro';
+import LiveApp from '../components/live/LiveApp';
 ---
 
 <AppLayout>
-  <main class="mx-auto max-w-3xl px-6 py-12">
-    <h1 class="text-3xl font-semibold tracking-tight">DraftPrep</h1>
-    <p class="mt-2 text-app-dim">
-      12-team · half PPR · slot 8 · Mon 24 Aug 2026, 17:30 CEST
+  <LiveApp client:only="preact" />
+  <noscript>
+    <p style="padding:2rem;text-align:center">
+      DraftPrep needs JavaScript — or use the printed kit in your bag.
     </p>
-    <section id="board-preview" class="mt-8">
-      <p class="text-app-dim text-sm">Loading board…</p>
-    </section>
-  </main>
-
-  <script>
-    // Phase 3 gate: render board.json as a plain table. If this renders in
-    // airplane mode from a cold Home-Screen launch, delivery is proven.
-    const el = document.getElementById('board-preview');
-    fetch(import.meta.env.BASE_URL + 'data/board.json')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((board) => {
-        const rows = (board.players ?? [])
-          .slice(0, 50)
-          .map(
-            (p, i) =>
-              `<tr class="border-b border-app-border">
-                 <td class="num py-1 pr-3 text-right">${i + 1}</td>
-                 <td class="py-1 pr-3">${p.name}</td>
-                 <td class="py-1 pr-3">${p.pos}</td>
-                 <td class="py-1 pr-3">${p.team}</td>
-                 <td class="num py-1 pr-3 text-right">${p.proj?.halfPpr ?? ''}</td>
-               </tr>`,
-          )
-          .join('');
-        el.innerHTML = `
-          <p class="text-xs text-app-dim mb-2">
-            snapshot ${board.buildHash ?? '—'} · built ${board.builtAt ?? '—'}
-          </p>
-          <table class="w-full text-sm">
-            <thead><tr class="text-left text-app-dim">
-              <th class="pr-3 text-right">#</th><th class="pr-3">Player</th>
-              <th class="pr-3">Pos</th><th class="pr-3">Team</th>
-              <th class="pr-3 text-right">½PPR</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>`;
-      })
-      .catch(() => {
-        el.innerHTML =
-          '<p class="text-sm text-app-dim">No board yet — run <code>npm run board</code> (Phase 2).</p>';
-      });
-  </script>
+  </noscript>
 </AppLayout>
